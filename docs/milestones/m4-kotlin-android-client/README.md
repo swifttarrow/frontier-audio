@@ -21,8 +21,8 @@ Ship **Jetpack Compose** app with **one press-to-talk** control, **EncryptedShar
 
 ### Automated Verification
 
-- [ ] `make test` / `./gradlew test` — protocol framing + state machine unit tests
-- [ ] `make lint` / `./gradlew lint` or ktlint
+- [x] `make test` / `./gradlew test` — protocol framing + state machine unit tests
+- [x] `make lint` / `./gradlew lint` or ktlint
 
 ### Manual Verification
 

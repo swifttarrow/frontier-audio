@@ -21,8 +21,8 @@ Implement **session issuance** (device-bound token), **WebSocket endpoint**, **a
 
 ### Automated Verification
 
-- [ ] `make test` — session creation, message parsing, idempotent `clientTurnId` handling
-- [ ] `make lint` — backend formatter/linter passes
+- [x] `make test` — session creation, message parsing, idempotent `clientTurnId` handling
+- [x] `make lint` — backend formatter/linter passes
 
 ### Manual Verification
 

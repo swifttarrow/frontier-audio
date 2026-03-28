@@ -7,12 +7,12 @@
 
 | # | Milestone | Status |
 |---|-----------|--------|
-| 0 | [m0-contracts-and-repo-skeleton](./m0-contracts-and-repo-skeleton/) | Pending |
-| 1 | [m1-backend-skeleton](./m1-backend-skeleton/) | Pending |
-| 2 | [m2-tools-github-operational-api](./m2-tools-github-operational-api/) | Pending |
-| 3 | [m3-memory](./m3-memory/) | Pending |
-| 4 | [m4-kotlin-android-client](./m4-kotlin-android-client/) | Pending |
-| 5 | [m5-hardening-and-evaluation](./m5-hardening-and-evaluation/) | Pending |
+| 0 | [m0-contracts-and-repo-skeleton](./m0-contracts-and-repo-skeleton/) | Complete |
+| 1 | [m1-backend-skeleton](./m1-backend-skeleton/) | Complete |
+| 2 | [m2-tools-github-operational-api](./m2-tools-github-operational-api/) | Complete |
+| 3 | [m3-memory](./m3-memory/) | Complete |
+| 4 | [m4-kotlin-android-client](./m4-kotlin-android-client/) | Complete |
+| 5 | [m5-hardening-and-evaluation](./m5-hardening-and-evaluation/) | Complete |
 
 ## Quick Links
 

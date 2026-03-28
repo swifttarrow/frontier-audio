@@ -21,8 +21,8 @@ Add **GitHub client** (public repo only) with **rate-limit handling** and **cach
 
 ### Automated Verification
 
-- [ ] `make test` — GitHub fixtures or recorded tests; fake API golden tests; empty/error tool tests
-- [ ] `make lint`
+- [x] `make test` — GitHub fixtures or recorded tests; fake API golden tests; empty/error tool tests
+- [x] `make lint`
 
 ### Manual Verification
 

@@ -23,8 +23,8 @@ Lock **WebSocket message schema** (JSON control + binary audio framing), **sessi
 
 ### Automated Verification
 
-- [ ] `make test` runs (no-op or placeholder acceptable)
-- [ ] `make lint` runs (placeholder acceptable)
+- [x] `make test` runs (no-op or placeholder acceptable)
+- [x] `make lint` runs (placeholder acceptable)
 
 ### Manual Verification
 

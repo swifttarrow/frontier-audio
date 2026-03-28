@@ -22,8 +22,8 @@ Add **per-device/IP rate limiting** on voice endpoints, **observability** (metri
 
 ### Automated Verification
 
-- [ ] `make test` full suite green in CI
-- [ ] `make lint` full workspace green
+- [x] `make test` full suite green in CI
+- [x] `make lint` full workspace green
 
 ### Manual Verification
 

@@ -20,8 +20,8 @@ Implement **MemoryChunk** persistence and retrieval keyed by **session/device**,
 
 ### Automated Verification
 
-- [ ] `make test` — two sessions isolated; same-session recall test
-- [ ] `make lint`
+- [x] `make test` — two sessions isolated; same-session recall test
+- [x] `make lint`
 
 ### Manual Verification
 
