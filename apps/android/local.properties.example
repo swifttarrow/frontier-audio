@@ -1,0 +1,2 @@
+# Voice gateway WebSocket URL
+voiceGatewayWsUrl=ws://10.0.2.2:8080/v1/voice
