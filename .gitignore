@@ -1,0 +1,50 @@
+# === Android ===
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# === JVM / Kotlin ===
+*.class
+*.jar
+*.war
+out/
+.kotlin/
+
+# === Python (if used) ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+
+# === Environment & secrets ===
+.env
+.env.local
+.env.*.local
+
+# === IDE ===
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Docker ===
+docker-compose.override.yml
+
+# === Postgres data (if local volume) ===
+pgdata/
