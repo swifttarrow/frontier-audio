@@ -1,35 +1,49 @@
 You are a senior software architect and database designer.
 
-Generate a **full production-oriented relational database schema** based on the existing PRD in this project.
+Generate a **full production-oriented relational database schema** from the **technical specification** for this project.
+
+## Source of truth
+
+1. **Primary:** the **tech spec** (technical specification). It defines entities, keys, retention, schema strategy, APIs that imply persistence, auth/session model, and open questions that affect storage.
+2. **Secondary:** the **PRD** or other product docs **only when** the tech spec points to them (e.g. “derived from PRD §…”), defers a decision to product/legal, or leaves a gap you must not invent without that context.
 
 Assume:
-- the PRD already exists in the repo/workspace
-- you should read and use it as the source of truth
-- if multiple PRD-like files exist, choose the one that most clearly represents the latest MVP scope and explain which file you used
+- a tech spec already exists in the repo/workspace **or** is pasted with the task
+- you should read and use it as the **authoritative** input for what to persist and how
+- if multiple spec-like files exist, prefer the one that matches the **current implementation scope** (filename, header scope notes, or recency) and state which file you used and why
+
+Typical locations (not exhaustive): `docs/specs/*.md`, milestone docs under `docs/milestones/` that lock schema decisions, or an output produced from `agent/prompts/tech-spec.md`.
 
 ## Goal
-Design the PostgreSQL schema for the MVP described in the PRD. The schema should be practical, implementation-ready, and aligned with the product and architecture decisions already documented.
+
+Design a relational schema (implementation-ready DDL and documentation) that **implements the tech spec’s data model** and any persistence implied elsewhere in the spec (workflows, idempotency, audit, config, rate-limit bookkeeping, etc.). Stay aligned with the spec’s **Assumption** / **Open question** labels: prefer explicit columns or TBD notes over silent invention.
 
 ## What to do first
-1. Find and read the PRD from the project files
-2. Extract the key product, architecture, and data-model requirements
-3. Identify any ambiguities that materially affect schema design
-4. Make explicit recommendations where needed
-5. Then generate the full schema
+
+1. Find and read the tech spec (and PRD only as needed per “Source of truth” above).
+2. Extract from the spec:
+   - **§ Data model** (or equivalent): entities, relationships, identity keys, retention/deletion.
+   - **APIs / interfaces**: resources that need tables, idempotency keys, correlation IDs, ordering constraints.
+   - **AuthN / AuthZ**: session tokens, device binding, future user migration hooks if mentioned.
+   - **NFRs**: observability or compliance that imply audit or metadata tables.
+3. List ambiguities that **materially** affect tables, keys, or constraints.
+4. State recommendations and assumptions where the spec is silent on DB details.
+5. Then generate the full schema.
 
 ## Output format
+
 Produce your response in the following sections:
 
-1. **PRD source used**
-   - file path(s)
-   - brief summary of the assumptions extracted
+1. **Tech spec source used**
+   - file path(s); note any PRD or other docs consulted and why
+   - brief summary of persistence-relevant decisions you extracted
 
 2. **Schema assumptions**
-   - list the important assumptions you are making from the PRD
-   - clearly note ambiguities and how you resolved them
+   - important assumptions grounded in the spec
+   - ambiguities and how you resolved them (or mark **TBD** for product/legal/engineering)
 
 3. **Entity list**
-   - concise list of core entities
+   - concise list of core tables/entities and their role
 
 4. **Relational schema**
    For each table include:
@@ -46,101 +60,74 @@ Produce your response in the following sections:
    - indexes
 
 5. **Relationship summary**
-   - summarize key one-to-one, one-to-many, and many-to-many relationships
+   - one-to-one, one-to-many, many-to-many as applicable
 
 6. **Recommended enums / lookup tables**
-   - identify which should be DB enums vs lookup tables vs constrained text
+   - DB enums vs lookup tables vs constrained text (justify per the spec’s evolution and query patterns)
 
 7. **Audit / history strategy**
-   - explain how auditability and historical data should work
+   - auditability, append-only or snapshot patterns **if** the spec requires them; otherwise state “not required by spec” explicitly
 
 8. **Soft delete / archival strategy**
-   - explain where soft deletes should be used and where they should not
+   - align with spec retention/deletion; where soft delete helps vs hard delete + tombstones
 
 9. **Permission-sensitive data notes**
-   - explain any schema implications of the moderation and access model
+   - schema implications of auth, device scope, secrets, PII, or moderation if the spec includes them
 
 10. **Migration order**
-    - recommend a safe order for creating the schema
+    - safe order for creating tables (respect FKs and extensions)
 
 11. **SQL DDL**
-    - generate PostgreSQL-flavored `CREATE TABLE` statements
-    - include indexes
-    - include constraints
-    - include enums if recommended
+    - PostgreSQL-flavored `CREATE TABLE` (and `CREATE TYPE` for enums if used)
+    - indexes and constraints as above
 
-12. **Future-proofing notes**
-    - what should remain flexible for v2+
+12. **Spec traceability**
+    - short mapping: table/group of tables → tech spec section(s) or bullet they satisfy
+
+13. **Future-proofing notes**
+    - what to keep flexible for later phases **as described in the spec** (e.g. adding user accounts without breaking device-scoped keys)
 
 ## Design constraints
-Use these unless the PRD strongly suggests otherwise:
-- PostgreSQL
-- UUID primary keys
-- `timestamptz` timestamps
-- modular monolith MVP
-- normalized schema where practical
-- explicit join tables for many-to-many relationships
-- separate users and districts
-- generic conversations model with direct/group types
-- append-only or snapshot-friendly district ingestion history
-- admin overrides modeled separately from ingested public data
-- configurable taxonomy structure
-- auditability for moderation/admin actions
-- support for user-scoped AI artifacts
-- avoid premature tables for ML/precomputed matching graphs unless clearly justified
 
-## The schema must support
-At minimum, support the capabilities described in the PRD, including:
-- users
-- district association
-- member / moderator / admin access
-- profile completion / soft gating support
-- district public-data ingestion
-- district attribute snapshots
-- admin overrides
-- problem taxonomy
-- primary + secondary problem selections
-- filtering and matching support
-- exact vs close match labeling support if needed at query/app level
-- direct conversations
-- group conversations
-- max group size of 8
-- messages
-- reports
-- moderation actions
-- audit logs
-- notifications
-- seeded/demo profiles if the PRD supports cold-start seeding
-- user-scoped AI summaries and suggested actions
+Apply these **unless the tech spec explicitly chooses otherwise**:
+
+- PostgreSQL
+- UUID primary keys where the spec uses UUIDs or where surrogate keys are appropriate
+- `timestamptz` for instants
+- normalized core entities; explicit join tables for many-to-many
+- lifecycle fields (`created_at`, `updated_at`, status) where entities have a lifecycle in the spec
+- enforce in the database what must hold for **data integrity**; defer to the app what the spec marks as product/UI-only
+
+Derive **feature-specific** requirements (sessions, turns, memory, tools, billing, etc.) **only** from the tech spec and cited product docs—not from a generic template.
 
 ## Important instructions
-- Do **not** invent major product features not supported by the PRD
-- Do **not** over-optimize for speculative scale
-- Do **not** collapse distinct concepts just to reduce table count
-- Include lifecycle fields such as `created_at`, `updated_at`, and status fields where appropriate
-- If a rule is better enforced in the app layer than the DB layer, say so explicitly
-- If a rule can be partially enforced in the DB and fully enforced in the app, explain both
-- For any major modeling choice, explain **why** you chose it
 
-## Specific design questions to answer
-Make strong recommendations on:
-- whether roles should be a join table, enum, or both
-- how to model district attribute snapshots vs current denormalized district columns
-- how to model taxonomy categories/tags/status/versioning
-- how to enforce exactly one primary problem selection per user
-- how to model direct vs group conversations safely
-- how to enforce group max size = 8
-- how to support seeded/demo profiles without polluting real community data
-- how to model reports against users, messages, and/or conversations
-- how to structure audit logs for moderation/admin actions
-- how to store AI summaries / AI suggestions so they remain user-scoped
+- Do **not** invent major persisted features **absent** from the tech spec (or clearly traced PRD scope the spec adopts).
+- Do **not** over-optimize for speculative scale.
+- Do **not** collapse distinct concepts just to reduce table count.
+- If a rule is better enforced in the app than the DB, say so; if split enforcement is right, explain both.
+- For major modeling choices, explain **why** in terms of the spec.
+
+## Design questions to answer
+
+Address the questions **raised by this tech spec** (not a fixed universal list). At minimum, scan the spec and answer any that apply, for example:
+
+- Identity: surrogate UUID vs natural keys; device/session/user scoping and migration path.
+- Idempotency and deduplication: columns and unique constraints for client-generated IDs or retries.
+- Retention: TTL-friendly columns, partition hints, or separate archive tables if the spec discusses deletion.
+- Large or binary payloads: in-row vs object storage references; what the spec says about audio or blobs.
+- Config vs data: what belongs in env/config vs relational tables per the spec.
+- Concurrency: versioning or optimistic locking if updates race on the same row.
+
+If the spec lists **Open questions**, reflect them in schema assumptions or TBDs instead of pretending they are decided.
 
 ## Final review pass
-After generating the schema, do a second-pass review and call out:
-1. normalization issues
-2. likely performance bottlenecks
-3. missing indexes
-4. constraints that should live in DB vs app layer
-5. fields better modeled as enums vs text
-6. tables that may be premature for MVP
-7. PRD ambiguities that still need product clarification
+
+After generating the schema, second-pass review:
+
+1. Normalization issues  
+2. Likely performance bottlenecks and missing indexes  
+3. Constraints that belong in DB vs app  
+4. Enums vs text vs lookup tables  
+5. Tables that are premature for the spec’s stated phase  
+6. Remaining spec or product ambiguities that still need clarification  
