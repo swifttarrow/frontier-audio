@@ -1,0 +1,10 @@
+{
+  "status": "healthy",
+  "services": {
+    "api": "operational",
+    "database": "connected",
+    "cache": "active"
+  },
+  "version": "1.0.0",
+  "uptime_seconds": 86400
+}

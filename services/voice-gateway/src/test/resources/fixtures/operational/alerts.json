@@ -1,0 +1,18 @@
+[
+  {
+    "id": "alert-001",
+    "severity": "warning",
+    "title": "High memory usage on api-server-3",
+    "description": "Memory usage exceeded 85% threshold",
+    "timestamp": "2026-03-28T10:30:00Z",
+    "resolved": false
+  },
+  {
+    "id": "alert-002",
+    "severity": "info",
+    "title": "Deployment completed successfully",
+    "description": "Version 2.1.0 deployed to production",
+    "timestamp": "2026-03-28T09:00:00Z",
+    "resolved": true
+  }
+]
