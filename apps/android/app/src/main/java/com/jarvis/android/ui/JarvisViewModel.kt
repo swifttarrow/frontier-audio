@@ -1,6 +1,11 @@
 package com.jarvis.android.ui
 
+import android.Manifest
 import android.app.Application
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.android.BuildConfig
@@ -32,7 +37,11 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     private val sessionStore = EncryptedSessionStore(application)
     private val deviceId = sessionStore.getOrCreateDeviceId()
-    private val gatewayClient = VoiceGatewayClient(BuildConfig.VOICE_GATEWAY_WS_URL, deviceId)
+    private val gatewayClient = VoiceGatewayClient(
+        BuildConfig.VOICE_GATEWAY_WS_URL,
+        deviceId,
+        sessionStartExtras = { buildSessionStartLocationPayload() }
+    )
     private val audioCapture = AudioCapturePipeline(application) { pcmData ->
         gatewayClient.sendAudio(pcmData)
     }
@@ -49,6 +58,23 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         observeGatewayEvents()
+    }
+
+    private fun buildSessionStartLocationPayload(): Map<String, Any> {
+        val ctx: Context = getApplication()
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return emptyMap()
+        }
+        val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            ?: return emptyMap()
+        return mapOf(
+            "latitude" to loc.latitude,
+            "longitude" to loc.longitude
+        )
     }
 
     fun onPttPressed() {
@@ -138,7 +164,18 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                     is ServerEvent.TranscriptFinal -> {
                         if (event.clientTurnId == currentTurnId) {
                             withContext(Dispatchers.Main) {
-                                _uiState.value = _uiState.value.copy(lastTranscript = event.text)
+                                _uiState.value = _uiState.value.copy(
+                                    lastTranscript = event.text,
+                                    lastAssistantText = ""
+                                )
+                            }
+                        }
+                    }
+                    is ServerEvent.AssistantTextDelta -> {
+                        if (event.clientTurnId == currentTurnId) {
+                            withContext(Dispatchers.Main) {
+                                val prev = _uiState.value.lastAssistantText
+                                _uiState.value = _uiState.value.copy(lastAssistantText = prev + event.text)
                             }
                         }
                     }

@@ -15,6 +15,8 @@ sealed class ServerEvent {
     data class SessionAck(val sessionId: String, val sessionToken: String, val repoDisplayName: String) : ServerEvent()
     data class TranscriptFinal(val text: String, val clientTurnId: String) : ServerEvent()
     data class AssistantText(val text: String, val clientTurnId: String) : ServerEvent()
+    /** Streaming fragment; append until [AssistantText] arrives for the same turn. */
+    data class AssistantTextDelta(val text: String, val clientTurnId: String) : ServerEvent()
     data class TtsStart(val clientTurnId: String) : ServerEvent()
     data class TtsChunk(val pcmData: ByteArray) : ServerEvent()
     data class TtsEnd(val interrupted: Boolean, val clientTurnId: String) : ServerEvent()
@@ -30,7 +32,9 @@ sealed class ServerEvent {
 
 class VoiceGatewayClient(
     private val wsUrl: String,
-    private val deviceId: String
+    private val deviceId: String,
+    /** Merged into session.start payload (e.g. latitude/longitude for weather). */
+    private val sessionStartExtras: () -> Map<String, Any> = { emptyMap() }
 ) {
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -59,9 +63,14 @@ class VoiceGatewayClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 reconnectAttempts = 0
                 // Send session.start
+                val payload = LinkedHashMap<String, Any>().apply {
+                    put("deviceId", deviceId)
+                    put("clientVersion", "0.1.0")
+                    putAll(sessionStartExtras())
+                }
                 val msg = buildControlMessage(
                     type = "session.start",
-                    payload = mapOf("deviceId" to deviceId, "clientVersion" to "0.1.0"),
+                    payload = payload,
                     requestId = UUID.randomUUID().toString()
                 )
                 webSocket.send(msg)
@@ -85,6 +94,10 @@ class VoiceGatewayClient(
                     "assistant.text" -> {
                         val text = msg.payload.get("text")?.asString ?: ""
                         eventChannel.trySend(ServerEvent.AssistantText(text, msg.clientTurnId ?: ""))
+                    }
+                    "assistant.text.delta" -> {
+                        val text = msg.payload.get("text")?.asString ?: ""
+                        eventChannel.trySend(ServerEvent.AssistantTextDelta(text, msg.clientTurnId ?: ""))
                     }
                     "tts.start" -> {
                         eventChannel.trySend(ServerEvent.TtsStart(msg.clientTurnId ?: ""))
