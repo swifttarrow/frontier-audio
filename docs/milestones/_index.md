@@ -13,6 +13,7 @@
 | 3 | [m3-memory](./m3-memory/) | Complete |
 | 4 | [m4-kotlin-android-client](./m4-kotlin-android-client/) | Complete |
 | 5 | [m5-hardening-and-evaluation](./m5-hardening-and-evaluation/) | Complete |
+| 6 | [m6-device-scoped-memory](./m6-device-scoped-memory/) | Planned |
 
 ## Quick Links
 
@@ -28,6 +29,7 @@ m0 (contracts + skeleton)
  → m1 (WS + STT/TTS + DB)
    → m2 (tools + orchestrator)
      → m3 (memory)
+       → m6 (device-scoped cross-session recall; option A — extends m3)
        → m4 (Android client)  [can start m4 in parallel after m0 for UI shell, but E2E needs m1+]
          → m5 (hardening)
 ```
