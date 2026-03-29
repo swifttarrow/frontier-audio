@@ -8,7 +8,8 @@ class LoggingTest {
 
     @Test
     fun `redactSecrets hides GitHub PATs`() {
-        val input = "Token is ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
+        // Classic GitHub PATs are ghp_ + 36 alphanumeric characters
+        val input = "Token is ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"
         val result = redactSecrets(input)
         assertContains(result, "ghp_[REDACTED]")
         assert(!result.contains("ABCDEFGHIJKLMNOP"))

@@ -8,14 +8,18 @@ data class IntegrationConfig(
 
 object IntegrationConfigProvider {
 
+    /** Non-null only when the variable is set and not blank (sourced `.env` often sets `KEY=`). */
+    private fun env(name: String): String? =
+        System.getenv(name)?.takeIf { it.isNotBlank() }
+
     fun load(): IntegrationConfig {
-        val repoUrl = System.getenv("JARVIS_DEFAULT_GITHUB_REPO_URL")
+        val repoUrl = env("JARVIS_DEFAULT_GITHUB_REPO_URL")
             ?: "https://github.com/anthropics/claude-code" // dev default
 
         val validated = validateAndNormalize(repoUrl)
-        val displayName = System.getenv("JARVIS_REPO_DISPLAY_NAME")
+        val displayName = env("JARVIS_REPO_DISPLAY_NAME")
             ?: parseDisplayName(validated)
-        val apiBaseUrl = System.getenv("OPERATIONAL_API_BASE_URL")
+        val apiBaseUrl = env("OPERATIONAL_API_BASE_URL")
 
         return IntegrationConfig(
             defaultPublicRepoUrl = validated,

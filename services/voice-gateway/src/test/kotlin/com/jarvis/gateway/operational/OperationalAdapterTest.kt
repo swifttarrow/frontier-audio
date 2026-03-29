@@ -34,10 +34,12 @@ class OperationalAdapterTest {
     }
 
     @Test
-    fun `error mode throws OperationalApiException`() = runBlocking {
-        val adapter = FakeOperationalAdapter("error")
-        assertFailsWith<OperationalApiException> {
-            adapter.healthSummary()
+    fun `error mode throws OperationalApiException`() {
+        runBlocking {
+            val adapter = FakeOperationalAdapter("error")
+            assertFailsWith<OperationalApiException> {
+                adapter.healthSummary()
+            }
         }
     }
 

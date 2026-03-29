@@ -1,12 +1,8 @@
 package com.jarvis.gateway.memory
 
-import com.jarvis.gateway.db.ConversationTurns
 import com.jarvis.gateway.db.DatabaseFactory
-import com.jarvis.gateway.db.DeviceSessions
 import com.jarvis.gateway.db.SessionRepository
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,10 +19,6 @@ class MemoryServiceTest {
     @BeforeTest
     fun setup() {
         DatabaseFactory.initForTest()
-        transaction {
-            SchemaUtils.drop(MemoryChunks, ConversationTurns, DeviceSessions)
-            SchemaUtils.create(DeviceSessions, ConversationTurns, MemoryChunks)
-        }
     }
 
     @Test
@@ -77,9 +69,8 @@ class MemoryServiceTest {
         service.appendTurnSummary(session.id, UUID.randomUUID(), "Q2", "A2")
 
         val chunks = service.recentChunks(session.id)
-        val ctx = service.buildMemoryContext(chunks)
-        assertTrue(ctx != null)
-        assertTrue(ctx!!.contains("Q1"))
+        val ctx = requireNotNull(service.buildMemoryContext(chunks))
+        assertTrue(ctx.contains("Q1"))
         assertTrue(ctx.contains("Q2"))
     }
 
