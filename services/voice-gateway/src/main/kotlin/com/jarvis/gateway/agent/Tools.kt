@@ -40,7 +40,7 @@ class ToolRegistry(
                 "Use after the user names a GitHub handle (e.g. after they answer who to analyze). " +
                 "Default limit is 3 for voice-friendly listing.",
             parameters = mapOf(
-                "github_username" to "string, required — GitHub login without @",
+                "github_username" to "string, required — GitHub login without @; contiguous (e.g. swifttarrow), never letter-by-letter hyphens (not s-w-i-f-t-...)",
                 "limit" to "integer, optional, default 3, max 30"
             )
         ),
@@ -114,8 +114,9 @@ class ToolRegistry(
     suspend fun executeTool(name: String, args: Map<String, Any?>, sessionId: UUID): ToolResult {
         return when (name) {
             "github_list_public_repos" -> {
-                val rawLogin = (args["github_username"] as? String)?.trim()?.removePrefix("@")
-                    ?: return noRepoToolResult("github_username is required")
+                val trimmed = (args["github_username"] as? String)?.trim()?.removePrefix("@")
+                if (trimmed.isNullOrBlank()) return noRepoToolResult("github_username is required")
+                val rawLogin = GitHubIdentifiers.normalizeVoiceSpelledLogin(trimmed)
                 if (!GitHubIdentifiers.isValidLogin(rawLogin)) {
                     return ToolResult(
                         data = """{"error":"invalid_github_username","message":"That does not look like a valid GitHub username."}""",
@@ -136,9 +137,9 @@ class ToolRegistry(
                             asOf = Instant.now()
                         )
                     }
-                    parts[0].trim() to parts[1].trim()
+                    GitHubIdentifiers.normalizeVoiceSpelledLogin(parts[0].trim()) to parts[1].trim()
                 } else {
-                    val o = (args["owner"] as? String)?.trim() ?: ""
+                    val o = GitHubIdentifiers.normalizeVoiceSpelledLogin((args["owner"] as? String)?.trim() ?: "")
                     val r = (args["repo"] as? String)?.trim() ?: ""
                     o to r
                 }

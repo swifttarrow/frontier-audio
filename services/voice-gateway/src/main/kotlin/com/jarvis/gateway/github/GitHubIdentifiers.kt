@@ -13,4 +13,19 @@ object GitHubIdentifiers {
         if (login.first() == '-' || login.last() == '-') return false
         return login.all { it.isLetterOrDigit() || it == '-' || it == '_' }
     }
+
+    /**
+     * Voice models often pass usernames spelled letter-by-letter as `s-w-i-f-t-t-a-r-r-o-w`.
+     * GitHub logins are contiguous (e.g. `swifttarrow`). When every `-`-separated segment is a
+     * single alphanumeric character and there are at least five segments, join them; otherwise
+     * return [login] unchanged (preserves real handles like `user-name`).
+     */
+    fun normalizeVoiceSpelledLogin(login: String): String {
+        val parts = login.split('-')
+        if (parts.size < 5) return login
+        if (parts.all { it.length == 1 && it.isNotEmpty() && it[0].isLetterOrDigit() }) {
+            return parts.joinToString("")
+        }
+        return login
+    }
 }
