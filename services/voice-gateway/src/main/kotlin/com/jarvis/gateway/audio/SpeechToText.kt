@@ -18,7 +18,9 @@ interface SpeechToText {
 class OpenAiStt(
     private val httpClient: HttpClient,
     private val apiKey: String,
-    private val model: String = "whisper-large-v3-turbo"
+    private val model: String = "whisper-large-v3-turbo",
+    /** ISO 639-1 (e.g. `en`). When set, passed to the API to avoid fragile auto-detection on noisy audio. */
+    private val language: String? = null
 ) : SpeechToText {
 
     private val logger = LoggerFactory.getLogger(OpenAiStt::class.java)
@@ -28,8 +30,9 @@ class OpenAiStt(
 
         val response = httpClient.submitFormWithBinaryData(
             url = "https://api.openai.com/v1/audio/transcriptions",
-            formData = formData {
+            formData =             formData {
                 append("model", model)
+                language?.trim()?.takeIf { it.isNotEmpty() }?.let { append("language", it) }
                 append("file", wavBytes, Headers.build {
                     append(HttpHeaders.ContentDisposition, "filename=\"audio.wav\"")
                     append(HttpHeaders.ContentType, "audio/wav")

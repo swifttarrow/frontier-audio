@@ -112,6 +112,7 @@ make lint    # all subprojects
 | `OPERATIONAL_FAKE_MODE` | No | normal | normal/empty/error/stale |
 | `LLM_MODEL` | No | gpt-5.4-nano | LLM model for orchestration |
 | `STT_MODEL` | No | whisper-large-v3-turbo | Transcription model for `/v1/audio/transcriptions`; override if your account returns an invalid-model error (e.g. `whisper-1` or `gpt-4o-mini-transcribe`) |
+| `STT_LANGUAGE` | No | - | Optional ISO 639-1 code (e.g. `en`) passed to the transcription API; reduces wrong-language transcripts when auto-detect mis-guesses on noisy or short audio |
 | `RETENTION_DAYS` | No | 30 | Data retention period |
 | `ADMIN_API_KEY` | No | - | Key for admin endpoints |
 | `LOG_LEVEL` | No | INFO | Logging level |

@@ -50,8 +50,9 @@ fun main() {
 
     val openAiKey = EnvSupport.get("OPENAI_API_KEY") ?: ""
     val sttModel = EnvSupport.get("STT_MODEL") ?: "whisper-large-v3-turbo"
+    val sttLanguage = EnvSupport.get("STT_LANGUAGE")?.trim()?.takeIf { it.isNotEmpty() }
     val stt: SpeechToText = if (openAiKey.isNotBlank()) {
-        OpenAiStt(httpClient, openAiKey, model = sttModel)
+        OpenAiStt(httpClient, openAiKey, model = sttModel, language = sttLanguage)
     } else {
         FakeStt()
     }
