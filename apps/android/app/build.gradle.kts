@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,8 +18,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Inject WS URL from local.properties
-        val wsUrl = project.findProperty("voiceGatewayWsUrl") as? String
+        // local.properties is not exposed to findProperty(); load it explicitly.
+        val localProps = Properties()
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use {
+            localProps.load(it)
+        }
+        val wsUrl = localProps.getProperty("voiceGatewayWsUrl")
+            ?: project.findProperty("voiceGatewayWsUrl") as? String
             ?: "ws://10.0.2.2:8080/v1/voice"
         buildConfigField("String", "VOICE_GATEWAY_WS_URL", "\"$wsUrl\"")
     }

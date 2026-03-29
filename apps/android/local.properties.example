@@ -1,2 +1,9 @@
+# Android SDK — required for ./gradlew unless ANDROID_HOME is set.
+# macOS (Android Studio default): sdk.dir=/Users/<you>/Library/Android/sdk
+# Linux: sdk.dir=/home/<you>/Android/Sdk
+sdk.dir=/path/to/your/Android/sdk
+
 # Voice gateway WebSocket URL
+# Emulator → host machine: ws://10.0.2.2:8080/v1/voice
+# Physical device → your Mac/PC LAN IP: ws://192.168.x.x:8080/v1/voice
 voiceGatewayWsUrl=ws://10.0.2.2:8080/v1/voice
