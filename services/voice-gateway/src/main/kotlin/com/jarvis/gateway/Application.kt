@@ -2,6 +2,7 @@ package com.jarvis.gateway
 
 import com.jarvis.gateway.agent.*
 import com.jarvis.gateway.audio.*
+import com.jarvis.gateway.config.EnvSupport
 import com.jarvis.gateway.config.IntegrationConfigProvider
 import com.jarvis.gateway.db.DatabaseFactory
 import com.jarvis.gateway.db.SessionRepository
@@ -33,7 +34,7 @@ fun main() {
         config.repoDisplayName ?: "(none — user selects in conversation)"
     )
 
-    val databaseUrl = System.getenv("DATABASE_URL")
+    val databaseUrl = EnvSupport.get("DATABASE_URL")
     if (databaseUrl != null) {
         DatabaseFactory.init(databaseUrl)
         logger.info("Database initialized")
@@ -47,7 +48,7 @@ fun main() {
         }
     }
 
-    val openAiKey = System.getenv("OPENAI_API_KEY") ?: ""
+    val openAiKey = EnvSupport.get("OPENAI_API_KEY") ?: ""
     val stt: SpeechToText = if (openAiKey.isNotBlank()) OpenAiStt(httpClient, openAiKey) else FakeStt()
     val tts: TextToSpeech = if (openAiKey.isNotBlank()) OpenAiTts(httpClient, openAiKey) else FakeTts()
 
@@ -55,8 +56,17 @@ fun main() {
         logger.warn("OPENAI_API_KEY not set — using fake STT/TTS")
     }
 
-    val githubToken = System.getenv("GITHUB_TOKEN")
-    val cacheTtl = System.getenv("GITHUB_CACHE_TTL_SECONDS")?.toLongOrNull() ?: 180
+    val githubToken = EnvSupport.get("GITHUB_TOKEN")
+    val cacheTtl = EnvSupport.get("GITHUB_CACHE_TTL_SECONDS")?.toLongOrNull() ?: 180
+
+    if (githubToken != null) {
+        logger.info("GITHUB_TOKEN is set (GitHub API calls use authenticated rate limits).")
+    } else {
+        logger.warn(
+            "GITHUB_TOKEN is not set — GitHub REST calls are unauthenticated (stricter rate limits). " +
+                "Add GITHUB_TOKEN to the repo-root .env or export it before starting the gateway."
+        )
+    }
 
     // Operational API adapter
     val operationalAdapter: OperationalApiAdapter = if (config.operationalApiBaseUrl.isNullOrBlank()) {
@@ -85,7 +95,7 @@ fun main() {
 
     // Data lifecycle
     val dataLifecycleService = DataLifecycleService()
-    val adminKey = System.getenv("ADMIN_API_KEY") ?: ""
+    val adminKey = EnvSupport.get("ADMIN_API_KEY") ?: ""
 
     val turnPipeline = TurnPipeline(stt, tts, repository, orchestrator, memoryService)
 

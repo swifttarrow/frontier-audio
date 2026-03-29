@@ -11,7 +11,7 @@ object IntegrationConfigProvider {
 
     /** Non-null only when the variable is set and not blank (sourced `.env` often sets `KEY=`). */
     private fun env(name: String): String? =
-        System.getenv(name)?.takeIf { it.isNotBlank() }
+        EnvSupport.get(name)?.takeIf { it.isNotBlank() }
 
     fun load(): IntegrationConfig {
         val apiBaseUrl = env("OPERATIONAL_API_BASE_URL")
