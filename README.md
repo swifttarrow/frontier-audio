@@ -105,7 +105,7 @@ make lint    # all subprojects
 | `DATABASE_URL` | No | - | PostgreSQL connection string |
 | `OPENAI_API_KEY` | Yes* | - | OpenAI API key for STT/TTS/LLM |
 | `GITHUB_TOKEN` | No | - | GitHub PAT for higher rate limits |
-| `JARVIS_DEFAULT_GITHUB_REPO_URL` | No | anthropics/claude-code | Default public repo |
+| `JARVIS_DEFAULT_GITHUB_REPO_URL` | No | - | If set, new sessions start with this public `owner/repo`; if unset, the assistant asks for a GitHub user and repo in conversation |
 | `OPERATIONAL_API_BASE_URL` | No | - | Unset = fake adapter |
 | `OPERATIONAL_FAKE_MODE` | No | normal | normal/empty/error/stale |
 | `LLM_MODEL` | No | gpt-4o | LLM model for orchestration |
