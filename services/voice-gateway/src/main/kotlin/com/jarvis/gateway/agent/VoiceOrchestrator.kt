@@ -12,6 +12,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.readUTF8Line
+import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -211,7 +212,7 @@ class LlmVoiceOrchestrator(
         try {
             while (!channel.isClosedForRead) {
                 if (shouldAbort()) {
-                    channel.cancel()
+                    channel.cancel(CancellationException("turn aborted"))
                     throw TurnInterruptedException()
                 }
                 val line = channel.readUTF8Line() ?: break
@@ -242,7 +243,7 @@ class LlmVoiceOrchestrator(
                 }
             }
         } finally {
-            channel.cancel()
+            channel.cancel(CancellationException("stream closed"))
         }
 
         val toolCalls = toolAcc.toToolCalls()
