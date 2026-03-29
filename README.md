@@ -58,11 +58,22 @@ Edit `.env` and set at minimum:
 
 ### 3. Run the voice gateway
 
+From the **repository root** (`frontier-audio/`), use the helper script so variables from `.env` are exported into the process (the JVM does not load `.env` on its own):
+
 ```bash
-cd services/voice-gateway
-gradle wrapper --gradle-version 8.5   # first time only
-./gradlew run
+./scripts/run-voice-gateway.sh
 ```
+
+If your shell is in `services/voice-gateway/`, use `../../scripts/run-voice-gateway.sh` instead (paths are relative to the repo root).
+
+Alternatively, export env vars yourself, then run Gradle:
+
+```bash
+set -a && source .env && set +a
+cd services/voice-gateway && ./gradlew run
+```
+
+(The repo includes the Gradle wrapper; JDK 17+ must be on your `PATH`, or use `./scripts/with-gradle-jdk.sh` as in the script above.)
 
 The server starts on `http://localhost:8080` with:
 - `GET /health` — health check
@@ -112,7 +123,15 @@ docker compose down          # stop (data preserved)
 docker compose down -v       # stop and wipe all data
 ```
 
-Default URL: `postgresql://jarvis:jarvis@localhost:5432/jarvis_dev`
+Default URL: `postgresql://jarvis:jarvis@localhost:5433/jarvis_dev` (Compose publishes the DB on **host port 5433** so it does not fight with a local Postgres on 5432.)
+
+**`FATAL: role "jarvis" does not exist`:** Usually `DATABASE_URL` still points at `localhost:5432`, which is often **not** this project’s container (for example Homebrew Postgres). Use port **5433** in `DATABASE_URL`, run `docker compose up -d` from the repo root, and recreate the stack if you changed the port mapping after an older `docker compose up`.
+
+**`FATAL: database "jarvis_dev" does not exist`:** Often a **reused Docker volume** was initialized without that database (the image only creates `POSTGRES_DB` on first empty startup). `./scripts/run-voice-gateway.sh` tries to create it automatically when Compose Postgres is running; you can also run `./scripts/ensure-jarvis-db.sh` by hand (it uses `template0` to avoid broken `template1` collation metadata).
+
+If you still see **collation version** / **template1** errors from Postgres, the volume’s cluster metadata is inconsistent (common after upgrades or odd Docker setups). Reset it: `docker compose down -v && docker compose up -d` (this deletes local DB data for this compose project).
+
+If you intentionally use another Postgres instance, set `DATABASE_URL` to that server’s host, port, user, and database.
 
 ## Evaluation
 
