@@ -48,18 +48,15 @@ class TurnPipeline(
             return
         }
 
-        // Send transcript.final
         sendFrame(Frame.Text(buildMessage(
             type = "transcript.final",
             payload = mapOf("text" to transcript),
             clientTurnId = turnIdStr
         )))
 
-        // 2. Persist user turn
         repository.insertTurn(session.sessionId, clientTurnId, "user", transcript)
         logger.info("User turn persisted: clientTurnId={}, transcript={}", clientTurnId, transcript)
 
-        // 3. Same-session conversation history for follow-ups ("try again", "what was that?")
         val conversationHistory = repository.recentTurns(session.sessionId, limit = 40)
             .asSequence()
             .filterNot { it.clientTurnId == clientTurnId && it.role == "user" }
@@ -70,43 +67,171 @@ class TurnPipeline(
             }
             .toList()
 
-        // 4. Load memory context (cross-session / summarized)
         val memoryCtx = memoryService?.let { svc ->
             val chunks = svc.recentChunks(session.sessionId)
             svc.buildMemoryContext(chunks)
         }
 
-        // 5. Generate assistant response via orchestrator
-        val result = orchestrator.handleUserUtterance(
-            sessionId = session.sessionId,
-            clientTurnId = clientTurnId,
-            transcript = transcript,
-            memoryContext = memoryCtx,
-            conversationHistory = conversationHistory
-        )
-        val assistantText = result.assistantText
+        var ttsStarted = false
+        val ttsBuffer = StringBuilder()
 
-        // Persist assistant turn
-        repository.insertTurn(session.sessionId, clientTurnId, "assistant", assistantText)
-
-        // Save memory (non-blocking, failure doesn't fail the turn)
-        memoryService?.appendTurnSummary(session.sessionId, clientTurnId, transcript, assistantText)
-
-        // Check interrupt before TTS
-        if (session.interrupted) {
-            logger.info("Turn interrupted before TTS: clientTurnId={}", clientTurnId)
+        val result = try {
+            orchestrator.handleUserUtteranceStreaming(
+                sessionId = session.sessionId,
+                clientTurnId = clientTurnId,
+                transcript = transcript,
+                memoryContext = memoryCtx,
+                conversationHistory = conversationHistory,
+                shouldAbort = { session.interrupted },
+                onAssistantTextDelta = { delta ->
+                    if (session.interrupted) throw TurnInterruptedException()
+                    sendFrame(Frame.Text(buildMessage(
+                        type = "assistant.text.delta",
+                        payload = mapOf("text" to delta),
+                        clientTurnId = turnIdStr
+                    )))
+                    ttsBuffer.append(delta)
+                    ttsStarted = flushSpeakableTts(
+                        ttsBuffer, streamEnded = false, ttsStarted, session, turnIdStr, sendFrame
+                    )
+                }
+            )
+        } catch (_: TurnInterruptedException) {
+            logger.info("Turn interrupted during orchestration or TTS: clientTurnId={}", clientTurnId)
+            if (ttsStarted) {
+                sendFrame(Frame.Text(buildMessage(
+                    type = "tts.end",
+                    payload = mapOf("interrupted" to true),
+                    clientTurnId = turnIdStr
+                )))
+            }
             return
         }
 
-        // 4. Send assistant text
+        repository.insertTurn(session.sessionId, clientTurnId, "assistant", result.assistantText)
+        memoryService?.appendTurnSummary(session.sessionId, clientTurnId, transcript, result.assistantText)
+
+        try {
+            ttsStarted = flushSpeakableTts(
+                ttsBuffer, streamEnded = true, ttsStarted, session, turnIdStr, sendFrame
+            )
+        } catch (_: TurnInterruptedException) {
+            logger.info("Turn interrupted flushing final TTS segment: clientTurnId={}", clientTurnId)
+            if (ttsStarted) {
+                sendFrame(Frame.Text(buildMessage(
+                    type = "tts.end",
+                    payload = mapOf("interrupted" to true),
+                    clientTurnId = turnIdStr
+                )))
+            }
+            sendFrame(Frame.Text(buildMessage(
+                type = "assistant.text",
+                payload = mapOf("text" to result.assistantText),
+                clientTurnId = turnIdStr
+            )))
+            return
+        }
+
         sendFrame(Frame.Text(buildMessage(
             type = "assistant.text",
-            payload = mapOf("text" to assistantText),
+            payload = mapOf("text" to result.assistantText),
             clientTurnId = turnIdStr
         )))
 
-        // 5. TTS
-        sendTtsResponse(assistantText, turnIdStr, session, sendFrame)
+        if (session.interrupted) {
+            logger.info("Turn interrupted before closing TTS: clientTurnId={}", clientTurnId)
+            if (ttsStarted) {
+                sendFrame(Frame.Text(buildMessage(
+                    type = "tts.end",
+                    payload = mapOf("interrupted" to true),
+                    clientTurnId = turnIdStr
+                )))
+            }
+            return
+        }
+
+        when {
+            result.error != null -> {
+                sendTtsResponse(result.assistantText, turnIdStr, session, sendFrame)
+            }
+            !ttsStarted && result.assistantText.isNotBlank() -> {
+                sendTtsResponse(result.assistantText, turnIdStr, session, sendFrame)
+            }
+            ttsStarted -> {
+                sendFrame(Frame.Text(buildMessage(
+                    type = "tts.end",
+                    payload = mapOf("interrupted" to false),
+                    clientTurnId = turnIdStr
+                )))
+                logger.info("TTS complete for clientTurnId={}", clientTurnId)
+            }
+            else -> { /* empty reply — nothing to speak */ }
+        }
+    }
+
+    /**
+     * Drains [buffer] into TTS using [TtsSegmentPlanner]. Sends [tts.start] before the first PCM byte.
+     * @return whether TTS downlink has started
+     */
+    private suspend fun flushSpeakableTts(
+        buffer: StringBuilder,
+        streamEnded: Boolean,
+        ttsAlreadyStarted: Boolean,
+        session: ActiveSession,
+        clientTurnId: String,
+        sendFrame: suspend (Frame) -> Unit
+    ): Boolean {
+        var started = ttsAlreadyStarted
+        while (true) {
+            val take = TtsSegmentPlanner.flushLength(buffer.toString(), streamEnded, started)
+            if (take <= 0) break
+            if (session.interrupted) throw TurnInterruptedException()
+            val raw = buffer.substring(0, take)
+            buffer.delete(0, take)
+            val segment = raw.trim()
+            if (segment.isEmpty()) continue
+            if (!started) {
+                sendFrame(Frame.Text(buildMessage(
+                    type = "tts.start",
+                    payload = mapOf(
+                        "format" to "pcm_24k_16bit_mono",
+                        "sampleRate" to 24000,
+                        "channels" to 1,
+                        "bitsPerSample" to 16
+                    ),
+                    clientTurnId = clientTurnId
+                )))
+                started = true
+                logger.info("Starting incremental TTS for clientTurnId={}", clientTurnId)
+            }
+            val pcm = tts.synthesize(segment).getOrElse { e ->
+                logger.error("TTS failed mid-stream for clientTurnId={}", clientTurnId, e)
+                sendFrame(Frame.Text(buildError("tts.failed", "Speech synthesis failed", true, clientTurnId = clientTurnId)))
+                throw TurnInterruptedException()
+            }
+            streamPcmChunks(pcm, session, clientTurnId, sendFrame)
+        }
+        return started
+    }
+
+    private suspend fun streamPcmChunks(
+        audioBytes: ByteArray,
+        session: ActiveSession,
+        clientTurnId: String,
+        sendFrame: suspend (Frame) -> Unit
+    ) {
+        val chunkSize = 32000
+        var offset = 0
+        while (offset < audioBytes.size) {
+            if (session.interrupted) throw TurnInterruptedException()
+            val end = minOf(offset + chunkSize, audioBytes.size)
+            val chunk = audioBytes.copyOfRange(offset, end)
+            val frame = ByteArray(1 + chunk.size)
+            frame[0] = AUDIO_KIND_PCM
+            chunk.copyInto(frame, 1)
+            sendFrame(Frame.Binary(true, frame))
+            offset = end
+        }
     }
 
     private suspend fun sendTtsResponse(
@@ -123,7 +248,6 @@ class TurnPipeline(
             return
         }
 
-        // Send tts.start
         sendFrame(Frame.Text(buildMessage(
             type = "tts.start",
             payload = mapOf(
@@ -135,30 +259,17 @@ class TurnPipeline(
             clientTurnId = clientTurnId
         )))
 
-        // Send audio chunks (max 32000 bytes payload per frame)
-        val chunkSize = 32000
-        var offset = 0
-        while (offset < audioBytes.size) {
-            if (session.interrupted) {
-                logger.info("TTS interrupted mid-stream: clientTurnId={}", clientTurnId)
-                sendFrame(Frame.Text(buildMessage(
-                    type = "tts.end",
-                    payload = mapOf("interrupted" to true),
-                    clientTurnId = clientTurnId
-                )))
-                return
-            }
-            val end = minOf(offset + chunkSize, audioBytes.size)
-            val chunk = audioBytes.copyOfRange(offset, end)
-            // Prepend kind byte
-            val frame = ByteArray(1 + chunk.size)
-            frame[0] = AUDIO_KIND_PCM
-            chunk.copyInto(frame, 1)
-            sendFrame(Frame.Binary(true, frame))
-            offset = end
+        try {
+            streamPcmChunks(audioBytes, session, clientTurnId, sendFrame)
+        } catch (_: TurnInterruptedException) {
+            sendFrame(Frame.Text(buildMessage(
+                type = "tts.end",
+                payload = mapOf("interrupted" to true),
+                clientTurnId = clientTurnId
+            )))
+            return
         }
 
-        // Send tts.end
         sendFrame(Frame.Text(buildMessage(
             type = "tts.end",
             payload = mapOf("interrupted" to false),

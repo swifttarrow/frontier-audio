@@ -12,13 +12,13 @@ interface SpeechToText {
 }
 
 /**
- * OpenAI Whisper / gpt-4o-transcribe STT client.
- * Sends raw PCM as WAV to the transcription endpoint.
+ * OpenAI Speech-to-Text client (`/v1/audio/transcriptions`).
+ * Sends raw PCM as WAV. Model ID must match what your API key supports (e.g. whisper-1, gpt-4o-mini-transcribe).
  */
 class OpenAiStt(
     private val httpClient: HttpClient,
     private val apiKey: String,
-    private val model: String = "whisper-1"
+    private val model: String = "whisper-large-v3-turbo"
 ) : SpeechToText {
 
     private val logger = LoggerFactory.getLogger(OpenAiStt::class.java)

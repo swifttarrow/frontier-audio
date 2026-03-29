@@ -1,13 +1,17 @@
 package com.jarvis.gateway.agent
 
+import com.jarvis.gateway.audio.TurnInterruptedException
+import com.jarvis.gateway.config.EnvSupport
 import com.jarvis.gateway.errors.UserFacingError
 import com.jarvis.gateway.errors.mapThrowableToUserFacing
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.readUTF8Line
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -19,8 +23,21 @@ interface VoiceOrchestrator {
         clientTurnId: UUID,
         transcript: String,
         memoryContext: String? = null,
-        /** Prior turns in this session (role, text), oldest first; must not include the current user utterance. */
         conversationHistory: List<Pair<String, String>> = emptyList()
+    ): OrchestratorResult
+
+    /**
+     * Streams visible assistant text via [onAssistantTextDelta]. When [shouldAbort] is true, aborts
+     * remote streaming and throws [TurnInterruptedException].
+     */
+    suspend fun handleUserUtteranceStreaming(
+        sessionId: UUID,
+        clientTurnId: UUID,
+        transcript: String,
+        memoryContext: String?,
+        conversationHistory: List<Pair<String, String>>,
+        shouldAbort: () -> Boolean,
+        onAssistantTextDelta: suspend (String) -> Unit
     ): OrchestratorResult
 }
 
@@ -33,8 +50,7 @@ class LlmVoiceOrchestrator(
     private val httpClient: HttpClient,
     private val apiKey: String,
     private val toolRegistry: ToolRegistry,
-    private val model: String = System.getenv("LLM_MODEL") ?: "gpt-4o",
-    private val toolTimeoutMs: Long = (System.getenv("TOOL_TIMEOUT_MS")?.toLongOrNull() ?: 10000)
+    private val model: String = EnvSupport.get("LLM_MODEL") ?: "gpt-5.4-nano"
 ) : VoiceOrchestrator {
 
     private val logger = LoggerFactory.getLogger(LlmVoiceOrchestrator::class.java)
@@ -49,6 +65,20 @@ class LlmVoiceOrchestrator(
         transcript: String,
         memoryContext: String?,
         conversationHistory: List<Pair<String, String>>
+    ): OrchestratorResult = handleUserUtteranceStreaming(
+        sessionId, clientTurnId, transcript, memoryContext, conversationHistory,
+        shouldAbort = { false },
+        onAssistantTextDelta = {}
+    )
+
+    override suspend fun handleUserUtteranceStreaming(
+        sessionId: UUID,
+        clientTurnId: UUID,
+        transcript: String,
+        memoryContext: String?,
+        conversationHistory: List<Pair<String, String>>,
+        shouldAbort: () -> Boolean,
+        onAssistantTextDelta: suspend (String) -> Unit
     ): OrchestratorResult {
         try {
             val messages = mutableListOf<Map<String, Any?>>()
@@ -83,9 +113,9 @@ class LlmVoiceOrchestrator(
                 )
             }
 
-            // First LLM call — may request tool calls
-            var response = callLlm(messages, tools)
-            var choice = extractChoice(response)
+            if (shouldAbort()) throw TurnInterruptedException()
+
+            var choice = callLlmStreaming(messages, tools, shouldAbort, onAssistantTextDelta)
             var iterations = 0
             val maxIterations = 5
 
@@ -113,6 +143,7 @@ class LlmVoiceOrchestrator(
                         emptyMap()
                     }
                     try {
+                        if (shouldAbort()) throw TurnInterruptedException()
                         logger.info("Executing tool: {} args={}", tc.name, args)
                         val result = toolRegistry.executeTool(tc.name, args, sessionId)
                         val freshnessNote = buildFreshnessNote(result.asOf)
@@ -133,11 +164,13 @@ class LlmVoiceOrchestrator(
                     }
                 }
 
-                response = callLlm(messages, tools)
-                choice = extractChoice(response)
+                if (shouldAbort()) throw TurnInterruptedException()
+                choice = callLlmStreaming(messages, tools, shouldAbort, onAssistantTextDelta)
             }
 
             return OrchestratorResult(assistantText = choice.content ?: "I'm not sure how to help with that.")
+        } catch (e: TurnInterruptedException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Orchestrator failed for clientTurnId={}", clientTurnId, e)
             val userError = mapThrowableToUserFacing(e)
@@ -145,12 +178,20 @@ class LlmVoiceOrchestrator(
         }
     }
 
-    private suspend fun callLlm(messages: List<Map<String, Any?>>, tools: List<Map<String, Any?>>): String {
-        val body = mapper.writeValueAsString(mapOf(
-            "model" to model,
-            "messages" to messages,
-            "tools" to tools
-        ))
+    private suspend fun callLlmStreaming(
+        messages: List<Map<String, Any?>>,
+        tools: List<Map<String, Any?>>,
+        shouldAbort: () -> Boolean,
+        onContentDelta: suspend (String) -> Unit
+    ): LlmChoice {
+        val body = mapper.writeValueAsString(
+            mapOf(
+                "model" to model,
+                "messages" to messages,
+                "tools" to tools,
+                "stream" to true
+            )
+        )
 
         val response = httpClient.post("https://api.openai.com/v1/chat/completions") {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
@@ -162,22 +203,55 @@ class LlmVoiceOrchestrator(
             throw RuntimeException("LLM API error: ${response.status} - ${response.bodyAsText()}")
         }
 
-        return response.bodyAsText()
-    }
+        val channel = response.bodyAsChannel()
+        val contentBuf = StringBuilder()
+        val toolAcc = StreamingToolCallAccumulator()
+        var sawToolCallDelta = false
 
-    private fun extractChoice(response: String): LlmChoice {
-        val json = mapper.readTree(response)
-        val choice = json.get("choices")?.get(0) ?: return LlmChoice(null, emptyList())
-        val message = choice.get("message") ?: return LlmChoice(null, emptyList())
-        val content = message.get("content")?.asText()
-        val toolCalls = message.get("tool_calls")?.map { tc ->
-            ToolCall(
-                id = tc.get("id").asText(),
-                name = tc.get("function").get("name").asText(),
-                arguments = tc.get("function").get("arguments").asText()
-            )
-        } ?: emptyList()
-        return LlmChoice(content, toolCalls)
+        try {
+            while (!channel.isClosedForRead) {
+                if (shouldAbort()) {
+                    channel.cancel()
+                    throw TurnInterruptedException()
+                }
+                val line = channel.readUTF8Line() ?: break
+                if (line.isEmpty()) continue
+                if (!line.startsWith("data: ")) continue
+                val data = line.removePrefix("data: ").trim()
+                if (data == "[DONE]") break
+
+                val json = try {
+                    mapper.readTree(data)
+                } catch (_: Exception) {
+                    continue
+                }
+                val choice = json.get("choices")?.get(0) ?: continue
+
+                val delta = choice.get("delta") ?: continue
+                val toolCallsNode = delta.get("tool_calls")
+                if (toolCallsNode != null && toolCallsNode.isArray && toolCallsNode.size() > 0) {
+                    sawToolCallDelta = true
+                    toolAcc.addDelta(toolCallsNode)
+                }
+                delta.get("content")?.asText()?.let { chunk ->
+                    if (chunk.isEmpty()) return@let
+                    contentBuf.append(chunk)
+                    if (!sawToolCallDelta) {
+                        onContentDelta(chunk)
+                    }
+                }
+            }
+        } finally {
+            channel.cancel()
+        }
+
+        val toolCalls = toolAcc.toToolCalls()
+            .filter { it.second.isNotBlank() }
+            .map { ToolCall(id = it.first, name = it.second, arguments = it.third) }
+        return LlmChoice(
+            content = contentBuf.toString().ifBlank { null },
+            toolCalls = toolCalls
+        )
     }
 
     private fun buildFreshnessNote(asOf: Instant): String {
@@ -187,6 +261,37 @@ class LlmVoiceOrchestrator(
 
     private data class LlmChoice(val content: String?, val toolCalls: List<ToolCall>)
     private data class ToolCall(val id: String, val name: String, val arguments: String)
+
+    private class StreamingToolCallAccumulator {
+        private val byIndex = sortedMapOf<Int, MutableToolCallFrag>()
+
+        fun addDelta(toolCallsNode: JsonNode) {
+            if (!toolCallsNode.isArray) return
+            for (i in 0 until toolCallsNode.size()) {
+                val node = toolCallsNode.get(i)
+                val idx = node.get("index")?.asInt() ?: continue
+                val entry = byIndex.getOrPut(idx) { MutableToolCallFrag() }
+                node.get("id")?.asText()?.takeIf { it.isNotEmpty() }?.let { entry.id = it }
+                val fn = node.get("function") ?: continue
+                fn.get("name")?.asText()?.takeIf { it.isNotEmpty() }?.let { entry.name = it }
+                fn.get("arguments")?.asText()?.let { entry.arguments.append(it) }
+            }
+        }
+
+        fun toToolCalls(): List<Triple<String, String, String>> =
+            byIndex.values.mapNotNull { it.finish() }
+    }
+
+    private class MutableToolCallFrag {
+        var id: String = ""
+        var name: String = ""
+        val arguments = StringBuilder()
+
+        fun finish(): Triple<String, String, String>? {
+            if (name.isBlank() && id.isBlank() && arguments.isEmpty()) return null
+            return Triple(id, name, arguments.toString())
+        }
+    }
 }
 
 /** Simple orchestrator that echoes transcript — used when no LLM API key is set. */
@@ -197,12 +302,28 @@ class EchoOrchestrator : VoiceOrchestrator {
         transcript: String,
         memoryContext: String?,
         conversationHistory: List<Pair<String, String>>
+    ): OrchestratorResult = handleUserUtteranceStreaming(
+        sessionId, clientTurnId, transcript, memoryContext, conversationHistory,
+        shouldAbort = { false },
+        onAssistantTextDelta = {}
+    )
+
+    override suspend fun handleUserUtteranceStreaming(
+        sessionId: UUID,
+        clientTurnId: UUID,
+        transcript: String,
+        memoryContext: String?,
+        conversationHistory: List<Pair<String, String>>,
+        shouldAbort: () -> Boolean,
+        onAssistantTextDelta: suspend (String) -> Unit
     ): OrchestratorResult {
+        if (shouldAbort()) throw TurnInterruptedException()
         val text = if (transcript.isBlank()) {
             "I didn't catch that. Could you try again?"
         } else {
             "Echo: $transcript"
         }
+        onAssistantTextDelta(text)
         return OrchestratorResult(assistantText = text)
     }
 }
