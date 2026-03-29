@@ -86,11 +86,12 @@ class ToolRegistry(
         ),
         ToolDef(
             name = "device_location",
-            description = "The user's current device coordinates for this voice session (latitude/longitude in WGS84), " +
-                "as reported by the app when the session started, plus an optional human-readable place name from reverse geocoding. " +
-                "Call this when the user asks where they are, what their coordinates are, whether you know their location, " +
-                "or before weather_current for 'here' if you need to confirm coordinates exist. " +
-                "Do not invent coordinates — only report what this tool returns.",
+            description = "The user's current device location for this voice session: optional human-readable place or address " +
+                "(reverse geocoding / client label) plus WGS84 coordinates for your internal use. " +
+                "Call when the user asks where they are, what their coordinates are, whether you know their location, " +
+                "or before weather_current for 'here' if you need to confirm a fix exists. " +
+                "When answering aloud, give place or address — not raw lat/long — unless they explicitly ask for coordinates. " +
+                "Do not invent location — only report what this tool returns.",
             parameters = emptyMap()
         ),
         ToolDef(
