@@ -109,7 +109,8 @@ fun main() {
 
     val turnPipeline = TurnPipeline(stt, tts, repository, orchestrator, memoryService)
 
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
+    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    embeddedServer(Netty, port = port, host = "0.0.0.0") {
         install(WebSockets) {
             pingPeriod = Duration.ofSeconds(15)
             timeout = Duration.ofSeconds(60)

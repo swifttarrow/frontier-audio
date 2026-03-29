@@ -50,10 +50,18 @@ object DatabaseFactory {
     }
 
     private fun parseUrl(url: String): Triple<String, String, String> {
-        // postgresql://user:pass@host:port/db -> jdbc:postgresql://host:port/db
+        // postgresql:// or postgres:// (e.g. Railway) -> jdbc:postgresql://...
+        val normalized =
+            when {
+                url.startsWith("postgresql://") -> url
+                url.startsWith("postgres://") -> "postgresql://" + url.removePrefix("postgres://")
+                else -> url
+            }
         val regex = Regex("""postgresql://([^:]+):([^@]+)@(.+)""")
-        val match = regex.matchEntire(url)
-            ?: throw IllegalArgumentException("Invalid DATABASE_URL format. Expected: postgresql://user:pass@host:port/db")
+        val match = regex.matchEntire(normalized)
+            ?: throw IllegalArgumentException(
+                "Invalid DATABASE_URL format. Expected: postgresql://user:pass@host:port/db (or postgres://)"
+            )
         val (user, password, hostAndDb) = match.destructured
         return Triple("jdbc:postgresql://$hostAndDb", user, password)
     }
