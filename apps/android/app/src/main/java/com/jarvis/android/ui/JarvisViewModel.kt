@@ -40,6 +40,8 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<JarvisUiState> = _uiState.asStateFlow()
 
     private var currentTurnId: String = ""
+    /** Matches [ServerEvent.TtsStart] / [ServerEvent.TtsEnd] when audio is for the active reply. */
+    private var playbackTurnId: String? = null
 
     init {
         observeGatewayEvents()
@@ -49,35 +51,37 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         val currentState = _uiState.value.state
 
         when (currentState) {
-            UiState.SPEAKING -> {
-                // Interrupt: tap during playback
+            UiState.SPEAKING, UiState.THINKING -> {
+                // Barge-in: stop playback, cancel server TTS/generation, then listen (say e.g. "quiet" or a new question)
                 ttsPlayback.stopPlayback()
+                playbackTurnId = null
                 gatewayClient.sendInterrupt(currentTurnId)
-                _uiState.value = _uiState.value.copy(state = UiState.IDLE)
+                beginListening()
             }
-            UiState.IDLE, UiState.ERROR -> {
-                // Start recording
-                if (gatewayClient.state != ConnectionState.READY) {
-                    gatewayClient.connect()
-                }
-                if (!audioCapture.hasPermission()) {
-                    _uiState.value = _uiState.value.copy(
-                        state = UiState.ERROR,
-                        errorMessage = "Microphone permission required"
-                    )
-                    return
-                }
-                try {
-                    currentTurnId = audioCapture.startCapture(viewModelScope)
-                    _uiState.value = _uiState.value.copy(state = UiState.LISTENING, errorMessage = "")
-                } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(
-                        state = UiState.ERROR,
-                        errorMessage = e.message ?: "Failed to start recording"
-                    )
-                }
-            }
-            else -> { /* ignore during LISTENING/THINKING */ }
+            UiState.IDLE, UiState.ERROR -> beginListening()
+            else -> { /* ignore during LISTENING */ }
+        }
+    }
+
+    private fun beginListening() {
+        if (gatewayClient.state != ConnectionState.READY) {
+            gatewayClient.connect()
+        }
+        if (!audioCapture.hasPermission()) {
+            _uiState.value = _uiState.value.copy(
+                state = UiState.ERROR,
+                errorMessage = "Microphone permission required"
+            )
+            return
+        }
+        try {
+            currentTurnId = audioCapture.startCapture(viewModelScope)
+            _uiState.value = _uiState.value.copy(state = UiState.LISTENING, errorMessage = "")
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                state = UiState.ERROR,
+                errorMessage = e.message ?: "Failed to start recording"
+            )
         }
     }
 
@@ -114,21 +118,32 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                         _uiState.value = _uiState.value.copy(repoDisplayName = event.repoDisplayName)
                     }
                     is ServerEvent.TranscriptFinal -> {
-                        _uiState.value = _uiState.value.copy(lastTranscript = event.text)
+                        if (event.clientTurnId == currentTurnId) {
+                            _uiState.value = _uiState.value.copy(lastTranscript = event.text)
+                        }
                     }
                     is ServerEvent.AssistantText -> {
-                        _uiState.value = _uiState.value.copy(lastAssistantText = event.text)
+                        if (event.clientTurnId == currentTurnId) {
+                            _uiState.value = _uiState.value.copy(lastAssistantText = event.text)
+                        }
                     }
                     is ServerEvent.TtsStart -> {
+                        if (event.clientTurnId != currentTurnId) return@collect
+                        playbackTurnId = event.clientTurnId
                         _uiState.value = _uiState.value.copy(state = UiState.SPEAKING)
                         ttsPlayback.startPlayback()
                     }
                     is ServerEvent.TtsChunk -> {
-                        ttsPlayback.writePcmData(event.pcmData)
+                        if (playbackTurnId != null && _uiState.value.state == UiState.SPEAKING) {
+                            ttsPlayback.writePcmData(event.pcmData)
+                        }
                     }
                     is ServerEvent.TtsEnd -> {
-                        ttsPlayback.stopPlayback()
-                        if (_uiState.value.state == UiState.SPEAKING) {
+                        if (event.interrupted || event.clientTurnId == playbackTurnId) {
+                            ttsPlayback.stopPlayback()
+                            playbackTurnId = null
+                        }
+                        if (_uiState.value.state == UiState.SPEAKING && event.clientTurnId == currentTurnId) {
                             _uiState.value = _uiState.value.copy(state = UiState.IDLE)
                         }
                     }
