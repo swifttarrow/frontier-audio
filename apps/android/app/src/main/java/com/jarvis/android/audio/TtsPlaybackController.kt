@@ -23,7 +23,7 @@ class TtsPlaybackController(context: Context) {
     fun startPlayback() {
         if (isPlaying) return
 
-        val sampleRate = 16000
+        val sampleRate = 24000
         val channelConfig = AudioFormat.CHANNEL_OUT_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
         val bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 2

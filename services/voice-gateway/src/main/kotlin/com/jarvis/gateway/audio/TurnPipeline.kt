@@ -115,8 +115,8 @@ class TurnPipeline(
         sendFrame(Frame.Text(buildMessage(
             type = "tts.start",
             payload = mapOf(
-                "format" to "pcm_16k_16bit_mono",
-                "sampleRate" to 16000,
+                "format" to "pcm_24k_16bit_mono",
+                "sampleRate" to 24000,
                 "channels" to 1,
                 "bitsPerSample" to 16
             ),

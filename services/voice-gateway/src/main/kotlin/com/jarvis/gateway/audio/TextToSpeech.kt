@@ -12,7 +12,7 @@ interface TextToSpeech {
 
 /**
  * OpenAI TTS client. Returns raw audio bytes (PCM or MP3 depending on config).
- * For v1, we request PCM 16kHz to match the WS protocol.
+ * OpenAI speech API returns raw PCM at 24 kHz (16-bit LE mono); the WS protocol matches that for TTS downlink.
  */
 class OpenAiTts(
     private val httpClient: HttpClient,
@@ -41,8 +41,8 @@ class OpenAiTts(
 /** Fake TTS for testing — returns a small sine wave PCM buffer. */
 class FakeTts : TextToSpeech {
     override suspend fun synthesize(text: String, voice: String?): Result<ByteArray> {
-        // Generate 0.5s of silence at 16kHz 16-bit mono
-        val samples = 8000
+        // Generate 0.5s of silence at 24kHz 16-bit mono (matches OpenAiTts PCM rate)
+        val samples = 12000
         val pcm = ByteArray(samples * 2) // 16-bit = 2 bytes per sample
         return Result.success(pcm)
     }

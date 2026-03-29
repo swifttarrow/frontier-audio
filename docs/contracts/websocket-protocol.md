@@ -178,8 +178,8 @@ Signals the beginning of TTS audio for a turn.
 {
   "type": "tts.start",
   "payload": {
-    "format": "pcm_16k_16bit_mono",
-    "sampleRate": 16000,
+    "format": "pcm_24k_16bit_mono",
+    "sampleRate": 24000,
     "channels": 1,
     "bitsPerSample": 16
   },
@@ -268,7 +268,7 @@ TTS audio is sent as binary WebSocket frames with the same structure:
 | Property | Value |
 |----------|-------|
 | Encoding | Linear PCM, signed 16-bit, little-endian |
-| Sample rate | 16,000 Hz |
+| Sample rate | 24,000 Hz (matches OpenAI `response_format: pcm`) |
 | Channels | 1 (mono) |
 | Frame header | 1-byte kind discriminator (value `0x01` = PCM audio) |
 
