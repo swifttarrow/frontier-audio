@@ -19,6 +19,7 @@ fun mapThrowableToUserFacing(t: Throwable): UserFacingError {
             speak = when (t.code) {
                 "github.rate_limited" -> "GitHub rate limit reached. Please try again in a moment."
                 "github.not_found" -> "I couldn't find that repository or resource on GitHub."
+                "github.user_not_found" -> "I couldn't find that GitHub user. Check the spelling of the username."
                 else -> "There was a problem reaching GitHub. Please try again."
             }
         )

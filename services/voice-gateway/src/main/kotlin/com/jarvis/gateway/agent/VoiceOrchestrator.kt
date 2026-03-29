@@ -106,7 +106,7 @@ class LlmVoiceOrchestrator(
                     }
                     try {
                         logger.info("Executing tool: {} args={}", tc.name, args)
-                        val result = toolRegistry.executeTool(tc.name, args)
+                        val result = toolRegistry.executeTool(tc.name, args, sessionId)
                         val freshnessNote = buildFreshnessNote(result.asOf)
                         val resultContent = "${result.data}\n[Data fetched: ${result.asOf}$freshnessNote]"
                         messages.add(mapOf(

@@ -1,8 +1,9 @@
 package com.jarvis.gateway.config
 
 data class IntegrationConfig(
-    val defaultPublicRepoUrl: String,
-    val repoDisplayName: String,
+    /** When set, new voice sessions start with this public repo already selected. */
+    val defaultPublicRepoUrl: String?,
+    val repoDisplayName: String?,
     val operationalApiBaseUrl: String?
 )
 
@@ -13,14 +14,17 @@ object IntegrationConfigProvider {
         System.getenv(name)?.takeIf { it.isNotBlank() }
 
     fun load(): IntegrationConfig {
-        val repoUrl = env("JARVIS_DEFAULT_GITHUB_REPO_URL")
-            ?: "https://github.com/anthropics/claude-code" // dev default
-
-        val validated = validateAndNormalize(repoUrl)
-        val displayName = env("JARVIS_REPO_DISPLAY_NAME")
-            ?: parseDisplayName(validated)
         val apiBaseUrl = env("OPERATIONAL_API_BASE_URL")
-
+        val repoUrl = env("JARVIS_DEFAULT_GITHUB_REPO_URL")
+        if (repoUrl == null) {
+            return IntegrationConfig(
+                defaultPublicRepoUrl = null,
+                repoDisplayName = null,
+                operationalApiBaseUrl = apiBaseUrl
+            )
+        }
+        val validated = validateAndNormalize(repoUrl)
+        val displayName = env("JARVIS_REPO_DISPLAY_NAME") ?: parseDisplayName(validated)
         return IntegrationConfig(
             defaultPublicRepoUrl = validated,
             repoDisplayName = displayName,

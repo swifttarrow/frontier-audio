@@ -1,25 +1,28 @@
 package com.jarvis.gateway.ws
 
-import com.jarvis.gateway.db.DeviceSession
+import com.jarvis.gateway.config.IntegrationConfig
 import com.jarvis.gateway.db.SessionRepository
+import com.jarvis.gateway.github.GitHubIdentifiers
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-data class ActiveSession(
+class ActiveSession(
     val sessionId: UUID,
     val deviceId: String,
     val sessionToken: String,
-    val repoDisplayName: String,
+    @Volatile var repoDisplayName: String,
+    @Volatile var githubOwner: String? = null,
+    @Volatile var githubRepo: String? = null,
     @Volatile var interrupted: Boolean = false,
     @Volatile var activeTurnId: String? = null
 )
 
 class SessionManager(
     private val repository: SessionRepository,
-    private val repoDisplayName: String
+    private val config: IntegrationConfig
 ) {
     private val activeSessions = ConcurrentHashMap<UUID, ActiveSession>()
 
@@ -27,11 +30,24 @@ class SessionManager(
         val token = generateToken()
         val tokenHash = hashToken(token)
         val session = repository.createSession(deviceId, tokenHash)
+        val initial = config.repoDisplayName?.let { display ->
+            val parts = display.split("/", limit = 2)
+            if (parts.size == 2 &&
+                GitHubIdentifiers.isValidOwnerOrRepo(parts[0]) &&
+                GitHubIdentifiers.isValidOwnerOrRepo(parts[1])
+            ) {
+                Triple(parts[0], parts[1], display)
+            } else {
+                null
+            }
+        }
         val active = ActiveSession(
             sessionId = session.id,
             deviceId = deviceId,
             sessionToken = token,
-            repoDisplayName = repoDisplayName
+            repoDisplayName = initial?.third ?: "not selected",
+            githubOwner = initial?.first,
+            githubRepo = initial?.second
         )
         activeSessions[session.id] = active
         return active

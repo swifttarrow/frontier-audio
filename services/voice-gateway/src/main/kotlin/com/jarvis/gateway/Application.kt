@@ -5,7 +5,6 @@ import com.jarvis.gateway.audio.*
 import com.jarvis.gateway.config.IntegrationConfigProvider
 import com.jarvis.gateway.db.DatabaseFactory
 import com.jarvis.gateway.db.SessionRepository
-import com.jarvis.gateway.github.*
 import com.jarvis.gateway.lifecycle.DataLifecycleService
 import com.jarvis.gateway.memory.*
 import com.jarvis.gateway.observability.Metrics
@@ -29,7 +28,10 @@ private val logger = LoggerFactory.getLogger("Application")
 
 fun main() {
     val config = IntegrationConfigProvider.load()
-    logger.info("Starting Jarvis voice-gateway, repo={}", config.repoDisplayName)
+    logger.info(
+        "Starting Jarvis voice-gateway, defaultRepo={}",
+        config.repoDisplayName ?: "(none — user selects in conversation)"
+    )
 
     val databaseUrl = System.getenv("DATABASE_URL")
     if (databaseUrl != null) {
@@ -53,11 +55,8 @@ fun main() {
         logger.warn("OPENAI_API_KEY not set — using fake STT/TTS")
     }
 
-    // GitHub client
     val githubToken = System.getenv("GITHUB_TOKEN")
     val cacheTtl = System.getenv("GITHUB_CACHE_TTL_SECONDS")?.toLongOrNull() ?: 180
-    val (owner, repo) = config.repoDisplayName.split("/", limit = 2)
-    val gitHubClient: GitHubClient = HttpGitHubClient(httpClient, owner, repo, githubToken, cacheTtl)
 
     // Operational API adapter
     val operationalAdapter: OperationalApiAdapter = if (config.operationalApiBaseUrl.isNullOrBlank()) {
@@ -68,8 +67,11 @@ fun main() {
         FakeOperationalAdapter() // Real HTTP adapter TBD
     }
 
-    // Tool registry and orchestrator
-    val toolRegistry = ToolRegistry(gitHubClient, operationalAdapter)
+    val repository = SessionRepository()
+    val sessionManager = SessionManager(repository, config)
+
+    // Tool registry and orchestrator (GitHub repo is per session; optional env default seeds new sessions)
+    val toolRegistry = ToolRegistry(httpClient, githubToken, cacheTtl, sessionManager, operationalAdapter)
     val orchestrator: VoiceOrchestrator = if (openAiKey.isNotBlank()) {
         LlmVoiceOrchestrator(httpClient, openAiKey, toolRegistry)
     } else {
@@ -85,8 +87,6 @@ fun main() {
     val dataLifecycleService = DataLifecycleService()
     val adminKey = System.getenv("ADMIN_API_KEY") ?: ""
 
-    val repository = SessionRepository()
-    val sessionManager = SessionManager(repository, config.repoDisplayName)
     val turnPipeline = TurnPipeline(stt, tts, repository, orchestrator, memoryService)
 
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
