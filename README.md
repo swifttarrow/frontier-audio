@@ -1,6 +1,8 @@
 # Jarvis
 
-Voice-first assistant that answers from a provided operational API and public GitHub data, with cross-session memory and interruptible playback.
+Voice-first assistant that answers from a provided operational API, public GitHub data, and optional web search, with cross-session memory and interruptible playback.
+
+This repository is the **frontier-audio** monorepo (Android client + Kotlin voice gateway).
 
 ## Architecture
 
@@ -9,6 +11,7 @@ Voice-first assistant that answers from a provided operational API and public Gi
    PTT UI                   |  |  |                  [OpenAI LLM + Tools]
    AudioRecord              |  |  |
    AudioTrack               |  |  +--> [GitHub REST API]
+                            |  |  +--> [Tavily API (optional: web_search)]
                             |  +-----> [Operational API (stub/real)]
                             +--------> [PostgreSQL: sessions, turns, memory]
 ```
@@ -55,6 +58,9 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 - `OPENAI_API_KEY` — for STT, TTS, and LLM
 - `GITHUB_TOKEN` — optional, for higher GitHub API rate limits
+- `TAVILY_API_KEY` — optional; without it, the `web_search` tool reports that search is not configured ([Tavily](https://tavily.com/))
+
+See [.env.example](.env.example) for all keys and defaults.
 
 ### 3. Run the voice gateway
 
@@ -87,18 +93,22 @@ The server starts on `http://localhost:8080` with:
 
 ```bash
 cd apps/android
-echo "voiceGatewayWsUrl=ws://10.0.2.2:8080/v1/voice" > local.properties
+cp local.properties.example local.properties
+# Set sdk.dir to your Android SDK path (see comments in local.properties.example).
+# voiceGatewayWsUrl defaults to the emulator host mapping below.
 ./gradlew installDebug
 ```
 
-Use `10.0.2.2` for the Android emulator (maps to host localhost).
+`local.properties.example` sets `voiceGatewayWsUrl=ws://10.0.2.2:8080/v1/voice` — use `10.0.2.2` on the **emulator** (host loopback). On a **physical device**, replace it with your machine’s LAN IP (for example `ws://192.168.x.x:8080/v1/voice`).
 
-### 5. Run tests
+### 5. Run tests and linters
 
 ```bash
 make test    # all subprojects
 make lint    # all subprojects
 ```
+
+The root `Makefile` also defines `make fmt` for future formatting; it is currently a no-op.
 
 ## Environment variables
 
@@ -107,7 +117,10 @@ make lint    # all subprojects
 | `DATABASE_URL` | No | - | PostgreSQL connection string |
 | `OPENAI_API_KEY` | Yes* | - | OpenAI API key for STT/TTS/LLM |
 | `GITHUB_TOKEN` | No | - | GitHub PAT for higher rate limits |
-| `JARVIS_DEFAULT_GITHUB_REPO_URL` | No | - | If set, new sessions start with this public `owner/repo`; if unset, the assistant asks for a GitHub user and repo in conversation |
+| `GITHUB_CACHE_TTL_SECONDS` | No | 180 | In-memory TTL (seconds) for cached GitHub REST responses in the gateway |
+| `JARVIS_DEFAULT_GITHUB_REPO_URL` | No | - | If set, new sessions start with this public `https://github.com/owner/repo` URL; if unset, the assistant asks for user and repo in conversation |
+| `JARVIS_REPO_DISPLAY_NAME` | No | derived | When a default repo URL is set, optional `owner/repo` label for logs and UX (otherwise parsed from the URL) |
+| `TAVILY_API_KEY` | No | - | Enables the `web_search` tool; if unset, that tool returns a configuration error |
 | `OPERATIONAL_API_BASE_URL` | No | - | Unset = fake adapter |
 | `OPERATIONAL_FAKE_MODE` | No | normal | normal/empty/error/stale |
 | `LLM_MODEL` | No | gpt-5.4-nano | LLM model for orchestration |
@@ -149,7 +162,9 @@ See [docs/eval/mvp-scenarios.md](docs/eval/mvp-scenarios.md) for the full evalua
 ## Documentation
 
 - [PRD](docs/prd.md)
+- [Requirements (source brief)](docs/requirements.md)
 - [Technical spec](docs/specs/1-initial.md)
+- [Database model](docs/db-model.md)
 - [Implementation plan](docs/plans/1-mvp.md)
 - [Milestones](docs/milestones/_index.md)
 
@@ -159,4 +174,5 @@ See [docs/eval/mvp-scenarios.md](docs/eval/mvp-scenarios.md) for the full evalua
 - **No keyboard input** — all interaction is voice-only by design
 - **Single-tenant** — one device identity per session, no multi-user auth
 - **Echo mode** — without `OPENAI_API_KEY`, responses are simple echoes
+- **Web search** — requires `TAVILY_API_KEY`; otherwise the tool is unavailable at runtime
 - **Operational API** — uses fake/stub adapter until real API spec is delivered
