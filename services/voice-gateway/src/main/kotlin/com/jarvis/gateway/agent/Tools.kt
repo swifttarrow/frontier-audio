@@ -96,8 +96,10 @@ class ToolRegistry(
         ),
         ToolDef(
             name = "stock_quote",
-            description = "Latest available stock or ETF quote (delayed) for a ticker symbol such as SPY or AAPL. " +
-                "US symbols need no exchange suffix; other markets may use forms like VOD.UK.",
+            description = "Latest available stock or ETF quote (delayed, not real-time). " +
+                "Call this whenever the user asks for a stock price, share price, or how a public company is trading. " +
+                "Map common names to tickers (e.g. Google or Alphabet → GOOGL or GOOG, Apple → AAPL, Microsoft → MSFT). " +
+                "US listings need no exchange suffix; other markets may use forms like VOD.UK.",
             parameters = mapOf("symbol" to "string, required — ticker symbol")
         ),
         ToolDef(
