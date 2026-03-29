@@ -49,7 +49,12 @@ fun main() {
     }
 
     val openAiKey = EnvSupport.get("OPENAI_API_KEY") ?: ""
-    val stt: SpeechToText = if (openAiKey.isNotBlank()) OpenAiStt(httpClient, openAiKey) else FakeStt()
+    val sttModel = EnvSupport.get("STT_MODEL") ?: "whisper-large-v3-turbo"
+    val stt: SpeechToText = if (openAiKey.isNotBlank()) {
+        OpenAiStt(httpClient, openAiKey, model = sttModel)
+    } else {
+        FakeStt()
+    }
     val tts: TextToSpeech = if (openAiKey.isNotBlank()) OpenAiTts(httpClient, openAiKey) else FakeTts()
 
     if (openAiKey.isBlank()) {
@@ -57,6 +62,10 @@ fun main() {
     }
 
     val githubToken = EnvSupport.get("GITHUB_TOKEN")
+    val tavilyApiKey = EnvSupport.get("TAVILY_API_KEY")
+    if (tavilyApiKey.isNullOrBlank()) {
+        logger.warn("TAVILY_API_KEY not set — web_search tool will return a configuration error until set.")
+    }
     val cacheTtl = EnvSupport.get("GITHUB_CACHE_TTL_SECONDS")?.toLongOrNull() ?: 180
 
     if (githubToken != null) {
@@ -81,7 +90,7 @@ fun main() {
     val sessionManager = SessionManager(repository, config)
 
     // Tool registry and orchestrator (GitHub repo is per session; optional env default seeds new sessions)
-    val toolRegistry = ToolRegistry(httpClient, githubToken, cacheTtl, sessionManager, operationalAdapter)
+    val toolRegistry = ToolRegistry(httpClient, githubToken, cacheTtl, sessionManager, operationalAdapter, tavilyApiKey)
     val orchestrator: VoiceOrchestrator = if (openAiKey.isNotBlank()) {
         LlmVoiceOrchestrator(httpClient, openAiKey, toolRegistry)
     } else {

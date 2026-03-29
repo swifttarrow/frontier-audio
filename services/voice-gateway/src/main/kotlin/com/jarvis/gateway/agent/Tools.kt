@@ -5,6 +5,7 @@ import com.jarvis.gateway.github.GitHubIdentifiers
 import com.jarvis.gateway.github.GitHubPayload
 import com.jarvis.gateway.github.HttpGitHubClient
 import com.jarvis.gateway.github.listPublicReposForUser
+import com.jarvis.gateway.infotools.InfotoolsService
 import com.jarvis.gateway.operational.OperationalApiAdapter
 import com.jarvis.gateway.operational.OperationalResult
 import com.jarvis.gateway.ws.SessionManager
@@ -24,10 +25,12 @@ class ToolRegistry(
     private val githubToken: String?,
     private val cacheTtlSeconds: Long,
     private val sessionManager: SessionManager,
-    private val operationalAdapter: OperationalApiAdapter
+    private val operationalAdapter: OperationalApiAdapter,
+    private val tavilyApiKey: String? = null
 ) {
     private val mapper = jacksonObjectMapper()
     private val repoClientCache = ConcurrentHashMap<String, GitHubClient>()
+    private val infotools = InfotoolsService(httpClient, tavilyApiKey)
 
     /** All available tool definitions for the LLM. */
     val toolDefinitions: List<ToolDef> = listOf(
@@ -80,6 +83,28 @@ class ToolRegistry(
             name = "operational_alerts",
             description = "Get recent operational alerts or events",
             parameters = mapOf("limit" to "integer, optional")
+        ),
+        ToolDef(
+            name = "weather_current",
+            description = "Current weather (temperature, conditions, wind) for a place or for the user's device location. " +
+                "Use when the user asks about weather. If they name a city or region, pass it as location_query. " +
+                "If they say 'here' or do not specify a place, omit location_query so the tool uses coordinates " +
+                "from the app session when available.",
+            parameters = mapOf(
+                "location_query" to "string, optional — e.g. Austin, Paris France; omit for device location"
+            )
+        ),
+        ToolDef(
+            name = "stock_quote",
+            description = "Latest available stock or ETF quote (delayed) for a ticker symbol such as SPY or AAPL. " +
+                "US symbols need no exchange suffix; other markets may use forms like VOD.UK.",
+            parameters = mapOf("symbol" to "string, required — ticker symbol")
+        ),
+        ToolDef(
+            name = "web_search",
+            description = "Search the public web for time-sensitive or local facts (store hours, nearby businesses, news). " +
+                "Use for questions that need live web data. Summarize results in natural speech; do not invent URLs.",
+            parameters = mapOf("query" to "string, required — concise search query in English")
         )
     )
 
@@ -167,6 +192,29 @@ class ToolRegistry(
                 val limit = (args["limit"] as? Number)?.toInt()
                 val result = operationalAdapter.alertsOrEvents(limit)
                 result.toToolResult()
+            }
+            "weather_current" -> {
+                val session = sessionManager.getActive(sessionId)
+                val locQuery = args["location_query"] as? String
+                val data = infotools.weatherCurrent(
+                    locationQuery = locQuery,
+                    sessionLat = session?.clientLatitude,
+                    sessionLon = session?.clientLongitude,
+                    sessionLocationLabel = session?.clientLocationLabel
+                )
+                ToolResult(data = data, asOf = Instant.now())
+            }
+            "stock_quote" -> {
+                val symbol = (args["symbol"] as? String)?.trim()
+                    ?: return noRepoToolResult("symbol is required")
+                val data = infotools.stockQuote(symbol)
+                ToolResult(data = data, asOf = Instant.now())
+            }
+            "web_search" -> {
+                val query = (args["query"] as? String)?.trim()
+                    ?: return noRepoToolResult("query is required")
+                val data = infotools.webSearch(query)
+                ToolResult(data = data, asOf = Instant.now())
             }
             else -> ToolResult(
                 data = """{"error": "Unknown tool: $name"}""",

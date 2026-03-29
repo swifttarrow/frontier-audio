@@ -17,7 +17,11 @@ class ActiveSession(
     @Volatile var githubOwner: String? = null,
     @Volatile var githubRepo: String? = null,
     @Volatile var interrupted: Boolean = false,
-    @Volatile var activeTurnId: String? = null
+    @Volatile var activeTurnId: String? = null,
+    /** Last reported device coordinates (from session.start); used when weather has no place name. */
+    @Volatile var clientLatitude: Double? = null,
+    @Volatile var clientLongitude: Double? = null,
+    @Volatile var clientLocationLabel: String? = null
 )
 
 class SessionManager(

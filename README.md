@@ -110,7 +110,8 @@ make lint    # all subprojects
 | `JARVIS_DEFAULT_GITHUB_REPO_URL` | No | - | If set, new sessions start with this public `owner/repo`; if unset, the assistant asks for a GitHub user and repo in conversation |
 | `OPERATIONAL_API_BASE_URL` | No | - | Unset = fake adapter |
 | `OPERATIONAL_FAKE_MODE` | No | normal | normal/empty/error/stale |
-| `LLM_MODEL` | No | gpt-4o | LLM model for orchestration |
+| `LLM_MODEL` | No | gpt-5.4-nano | LLM model for orchestration |
+| `STT_MODEL` | No | whisper-large-v3-turbo | Transcription model for `/v1/audio/transcriptions`; override if your account returns an invalid-model error (e.g. `whisper-1` or `gpt-4o-mini-transcribe`) |
 | `RETENTION_DAYS` | No | 30 | Data retention period |
 | `ADMIN_API_KEY` | No | - | Key for admin endpoints |
 | `LOG_LEVEL` | No | INFO | Logging level |

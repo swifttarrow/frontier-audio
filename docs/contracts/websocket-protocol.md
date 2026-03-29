@@ -55,7 +55,10 @@ Sent once after WebSocket open. Server MUST NOT accept audio before acknowledgin
   "type": "session.start",
   "payload": {
     "deviceId": "<string>",       // stable per install
-    "clientVersion": "1.0.0"      // semver
+    "clientVersion": "1.0.0",    // semver
+    "latitude": 30.27,            // optional — device latitude (WGS84), for weather "here"
+    "longitude": -97.74,          // optional — device longitude; SHOULD be sent with latitude
+    "locationLabel": "Austin, TX" // optional — human-readable hint for the model
   },
   "requestId": "<uuid>"           // optional
 }
@@ -158,7 +161,7 @@ Final STT transcript for the utterance.
 
 ### `assistant.text`
 
-Optional text of the assistant's response (useful for logging/display).
+Full assistant response after generation completes (canonical string; use for display even if deltas were received).
 
 ```jsonc
 {
@@ -169,6 +172,22 @@ Optional text of the assistant's response (useful for logging/display).
   "clientTurnId": "<uuid>"
 }
 ```
+
+### `assistant.text.delta`
+
+Incremental fragment of the assistant reply while the model is streaming. A turn MAY emit zero or many deltas, then always ends with `assistant.text` (unless the turn errors or is interrupted).
+
+```jsonc
+{
+  "type": "assistant.text.delta",
+  "payload": {
+    "text": "<UTF-8 fragment>"
+  },
+  "clientTurnId": "<uuid>"
+}
+```
+
+Clients SHOULD append each `text` to a running buffer for the turn, then replace with `assistant.text` when it arrives.
 
 ### `tts.start`
 
@@ -298,8 +317,10 @@ Client                              Server
   |--- [binary audio frames] -------->  |  (PTT held)
   |--- audio.commit ----------------->  |  (PTT released)
   |<-- transcript.final --------------|
-  |<-- tts.start ---------------------|
+  |<-- assistant.text.delta (0..n) ---|  (optional — streaming model)
+  |<-- tts.start ---------------------|  (may follow first speakable segment)
   |<-- [binary TTS chunks] ----------|
+  |<-- assistant.text ----------------|  (full text)
   |<-- tts.end -----------------------|
   |                                    |
   |--- [binary audio frames] -------->  |  (next turn)

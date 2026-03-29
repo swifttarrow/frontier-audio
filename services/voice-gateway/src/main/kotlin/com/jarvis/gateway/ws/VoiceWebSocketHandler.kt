@@ -40,6 +40,15 @@ fun Routing.voiceWebSocket(sessionManager: SessionManager, turnPipeline: TurnPip
 
                                 try {
                                     val session = sessionManager.createSession(deviceId)
+                                    val latNode = msg.payload.get("latitude")
+                                    val lonNode = msg.payload.get("longitude")
+                                    if (latNode != null && latNode.isNumber && lonNode != null && lonNode.isNumber) {
+                                        session.clientLatitude = latNode.doubleValue()
+                                        session.clientLongitude = lonNode.doubleValue()
+                                    }
+                                    msg.payload.get("locationLabel")?.asText()?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                                        session.clientLocationLabel = it
+                                    }
                                     activeSession = session
                                     logger.info("Session created: sessionId={}, deviceId={}", session.sessionId, deviceId)
 

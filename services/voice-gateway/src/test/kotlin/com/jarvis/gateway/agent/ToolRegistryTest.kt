@@ -47,4 +47,18 @@ class ToolRegistryTest {
         assertEquals("acme/widget", active.repoDisplayName)
         http.close()
     }
+
+    @Test
+    fun `weather_current returns location_required without query or session coords`() = runBlocking {
+        DatabaseFactory.initForTest()
+        val sessionManager = SessionManager(SessionRepository(), IntegrationConfig(null, null, null))
+        val active = sessionManager.createSession("device-t3")
+        val http = HttpClient(CIO)
+        val registry = ToolRegistry(http, null, 180, sessionManager, FakeOperationalAdapter())
+
+        val result = registry.executeTool("weather_current", emptyMap(), active.sessionId)
+
+        assertContains(result.data, "location_required")
+        http.close()
+    }
 }
