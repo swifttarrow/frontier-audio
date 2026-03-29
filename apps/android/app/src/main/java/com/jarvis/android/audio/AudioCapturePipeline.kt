@@ -45,8 +45,9 @@ class AudioCapturePipeline(
             CHUNK_SIZE * 2
         )
 
+        // VOICE_RECOGNITION is tuned for speech and tends to route host mic reliably on emulators vs MIC.
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
             SAMPLE_RATE,
             CHANNEL_CONFIG,
             AUDIO_FORMAT,
