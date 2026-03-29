@@ -107,6 +107,11 @@ fun PttButton(
     onPress: () -> Unit,
     onRelease: () -> Unit
 ) {
+    // Stable pointerInput: using `state` as a key restarts the gesture when state changes (e.g. THINKING → LISTENING),
+    // cancelling the in-flight press so interrupt/stop never completes.
+    val currentOnPress = rememberUpdatedState(onPress)
+    val currentOnRelease = rememberUpdatedState(onRelease)
+
     val buttonColor = when (state) {
         UiState.IDLE -> MaterialTheme.colorScheme.primary
         UiState.LISTENING -> Color(0xFFE53935) // red while recording
@@ -118,7 +123,7 @@ fun PttButton(
     val label = when (state) {
         UiState.IDLE -> "Hold to Talk"
         UiState.LISTENING -> "Listening..."
-        UiState.THINKING -> "Thinking..."
+        UiState.THINKING -> "Tap to cancel"
         UiState.SPEAKING -> "Tap to Stop"
         UiState.ERROR -> "Tap to Retry"
     }
@@ -127,13 +132,13 @@ fun PttButton(
         modifier = Modifier
             .size(160.dp)
             .semantics { contentDescription = "Press to talk button. $label" }
-            .pointerInput(state) {
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
-                        onPress()
+                        currentOnPress.value()
                         val released = tryAwaitRelease()
                         if (released) {
-                            onRelease()
+                            currentOnRelease.value()
                         }
                     }
                 )

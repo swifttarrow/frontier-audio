@@ -18,7 +18,13 @@ sealed class ServerEvent {
     data class TtsStart(val clientTurnId: String) : ServerEvent()
     data class TtsChunk(val pcmData: ByteArray) : ServerEvent()
     data class TtsEnd(val interrupted: Boolean, val clientTurnId: String) : ServerEvent()
-    data class Error(val code: String, val message: String, val retryable: Boolean) : ServerEvent()
+    data class Error(
+        val code: String,
+        val message: String,
+        val retryable: Boolean,
+        /** Present for turn-scoped errors (e.g. stt.failed); empty for connection/protocol errors. */
+        val clientTurnId: String = ""
+    ) : ServerEvent()
     data class ConnectionChanged(val state: ConnectionState) : ServerEvent()
 }
 
@@ -91,7 +97,8 @@ class VoiceGatewayClient(
                         val code = msg.payload.get("code")?.asString ?: "unknown"
                         val message = msg.payload.get("message")?.asString ?: "Unknown error"
                         val retryable = msg.payload.get("retryable")?.asBoolean ?: false
-                        eventChannel.trySend(ServerEvent.Error(code, message, retryable))
+                        val turnId = msg.clientTurnId ?: ""
+                        eventChannel.trySend(ServerEvent.Error(code, message, retryable, turnId))
                     }
                 }
             }

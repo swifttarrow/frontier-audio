@@ -34,7 +34,9 @@ class AudioCapturePipeline(
 
     fun startCapture(scope: CoroutineScope): String {
         if (!hasPermission()) throw SecurityException("RECORD_AUDIO permission not granted")
-        if (isCapturing) return "" // already capturing
+        if (isCapturing) {
+            stopCapture()
+        }
 
         val clientTurnId = UUID.randomUUID().toString()
 

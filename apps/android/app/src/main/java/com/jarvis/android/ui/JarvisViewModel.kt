@@ -52,11 +52,16 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
         when (currentState) {
             UiState.SPEAKING, UiState.THINKING -> {
-                // Barge-in: stop playback, cancel server TTS/generation, then listen (say e.g. "quiet" or a new question)
+                // Barge-in / tap-to-stop: do not start capture here — that used to flip state mid-gesture and cancel
+                // the Compose pointerInput block keyed on state. Go IDLE; user holds the button again to talk.
+                val turn = currentTurnId
                 ttsPlayback.stopPlayback()
                 playbackTurnId = null
-                gatewayClient.sendInterrupt(currentTurnId)
-                beginListening()
+                if (turn.isNotEmpty()) {
+                    gatewayClient.sendInterrupt(turn)
+                }
+                currentTurnId = ""
+                _uiState.value = _uiState.value.copy(state = UiState.IDLE, errorMessage = "")
             }
             UiState.IDLE, UiState.ERROR -> beginListening()
             else -> { /* ignore during LISTENING */ }
@@ -105,6 +110,10 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
             gatewayClient.events.collect { event ->
                 when (event) {
                     is ServerEvent.ConnectionChanged -> {
+                        if (event.state == ConnectionState.ERROR ||
+                            event.state == ConnectionState.DISCONNECTED) {
+                            audioCapture.stopCapture()
+                        }
                         _uiState.value = _uiState.value.copy(connectionState = event.state)
                         if (event.state == ConnectionState.ERROR) {
                             _uiState.value = _uiState.value.copy(
@@ -148,6 +157,10 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                     is ServerEvent.Error -> {
+                        val turnScoped = event.clientTurnId.isNotEmpty()
+                        if (turnScoped && event.clientTurnId != currentTurnId) {
+                            return@collect
+                        }
                         _uiState.value = _uiState.value.copy(
                             state = UiState.ERROR,
                             errorMessage = event.message
