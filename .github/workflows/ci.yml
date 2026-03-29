@@ -41,7 +41,7 @@ jobs:
       - name: Generate Gradle wrapper
         working-directory: services/voice-gateway
         run: |
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 9.4.1
 
       - name: Run tests
         working-directory: services/voice-gateway

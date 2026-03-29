@@ -15,6 +15,7 @@ captures/
 # === JVM / Kotlin ===
 *.class
 *.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 *.war
 out/
 .kotlin/
