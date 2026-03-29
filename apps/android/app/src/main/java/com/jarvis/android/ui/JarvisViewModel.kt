@@ -10,10 +10,12 @@ import com.jarvis.android.storage.EncryptedSessionStore
 import com.jarvis.android.ws.ConnectionState
 import com.jarvis.android.ws.ServerEvent
 import com.jarvis.android.ws.VoiceGatewayClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class UiState { IDLE, LISTENING, THINKING, SPEAKING, ERROR }
 
@@ -39,8 +41,10 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(JarvisUiState())
     val uiState: StateFlow<JarvisUiState> = _uiState.asStateFlow()
 
+    @Volatile
     private var currentTurnId: String = ""
     /** Matches [ServerEvent.TtsStart] / [ServerEvent.TtsEnd] when audio is for the active reply. */
+    @Volatile
     private var playbackTurnId: String? = null
 
     init {
@@ -106,7 +110,8 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun observeGatewayEvents() {
-        viewModelScope.launch {
+        // WebSocket delivery + AudioTrack.write block for buffer space; must not run on Main or ANRs (e.g. interrupt).
+        viewModelScope.launch(Dispatchers.IO) {
             gatewayClient.events.collect { event ->
                 when (event) {
                     is ServerEvent.ConnectionChanged -> {
@@ -114,36 +119,46 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                             event.state == ConnectionState.DISCONNECTED) {
                             audioCapture.stopCapture()
                         }
-                        _uiState.value = _uiState.value.copy(connectionState = event.state)
-                        if (event.state == ConnectionState.ERROR) {
-                            _uiState.value = _uiState.value.copy(
-                                state = UiState.ERROR,
-                                errorMessage = "Connection lost"
-                            )
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(connectionState = event.state)
+                            if (event.state == ConnectionState.ERROR) {
+                                _uiState.value = _uiState.value.copy(
+                                    state = UiState.ERROR,
+                                    errorMessage = "Connection lost"
+                                )
+                            }
                         }
                     }
                     is ServerEvent.SessionAck -> {
                         sessionStore.setSessionToken(event.sessionToken)
-                        _uiState.value = _uiState.value.copy(repoDisplayName = event.repoDisplayName)
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(repoDisplayName = event.repoDisplayName)
+                        }
                     }
                     is ServerEvent.TranscriptFinal -> {
                         if (event.clientTurnId == currentTurnId) {
-                            _uiState.value = _uiState.value.copy(lastTranscript = event.text)
+                            withContext(Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(lastTranscript = event.text)
+                            }
                         }
                     }
                     is ServerEvent.AssistantText -> {
                         if (event.clientTurnId == currentTurnId) {
-                            _uiState.value = _uiState.value.copy(lastAssistantText = event.text)
+                            withContext(Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(lastAssistantText = event.text)
+                            }
                         }
                     }
                     is ServerEvent.TtsStart -> {
                         if (event.clientTurnId != currentTurnId) return@collect
                         playbackTurnId = event.clientTurnId
-                        _uiState.value = _uiState.value.copy(state = UiState.SPEAKING)
                         ttsPlayback.startPlayback()
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(state = UiState.SPEAKING)
+                        }
                     }
                     is ServerEvent.TtsChunk -> {
-                        if (playbackTurnId != null && _uiState.value.state == UiState.SPEAKING) {
+                        if (playbackTurnId != null) {
                             ttsPlayback.writePcmData(event.pcmData)
                         }
                     }
@@ -152,8 +167,11 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                             ttsPlayback.stopPlayback()
                             playbackTurnId = null
                         }
-                        if (_uiState.value.state == UiState.SPEAKING && event.clientTurnId == currentTurnId) {
-                            _uiState.value = _uiState.value.copy(state = UiState.IDLE)
+                        withContext(Dispatchers.Main) {
+                            if (_uiState.value.state == UiState.SPEAKING &&
+                                event.clientTurnId == currentTurnId) {
+                                _uiState.value = _uiState.value.copy(state = UiState.IDLE)
+                            }
                         }
                     }
                     is ServerEvent.Error -> {
@@ -161,10 +179,12 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                         if (turnScoped && event.clientTurnId != currentTurnId) {
                             return@collect
                         }
-                        _uiState.value = _uiState.value.copy(
-                            state = UiState.ERROR,
-                            errorMessage = event.message
-                        )
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                state = UiState.ERROR,
+                                errorMessage = event.message
+                            )
+                        }
                     }
                 }
             }
