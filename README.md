@@ -58,13 +58,15 @@ Edit `.env` and set at minimum:
 
 ### 3. Run the voice gateway
 
-From the **repository root** (`frontier-audio/`), use the helper script so variables from `.env` are exported into the process (the JVM does not load `.env` on its own):
+From the **repository root** (`frontier-audio/`), use the helper script so variables from `.env` are exported into the process:
 
 ```bash
 ./scripts/run-voice-gateway.sh
 ```
 
 If your shell is in `services/voice-gateway/`, use `../../scripts/run-voice-gateway.sh` instead (paths are relative to the repo root).
+
+The gateway also **reads a repo-root `.env` itself** when you run `ApplicationKt` from the IDE or `./gradlew run` without sourcing: it walks up from the current working directory until it finds `.env`. Real process environment variables still take precedence. **Fine-grained GitHub PATs** must include the repositories you query and **read** access for metadata, issues, and pull requests; org repos often need **SSO authorize** on the token.
 
 Alternatively, export env vars yourself, then run Gradle:
 
