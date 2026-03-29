@@ -18,7 +18,9 @@ interface VoiceOrchestrator {
         sessionId: UUID,
         clientTurnId: UUID,
         transcript: String,
-        memoryContext: String? = null
+        memoryContext: String? = null,
+        /** Prior turns in this session (role, text), oldest first; must not include the current user utterance. */
+        conversationHistory: List<Pair<String, String>> = emptyList()
     ): OrchestratorResult
 }
 
@@ -45,7 +47,8 @@ class LlmVoiceOrchestrator(
         sessionId: UUID,
         clientTurnId: UUID,
         transcript: String,
-        memoryContext: String?
+        memoryContext: String?,
+        conversationHistory: List<Pair<String, String>>
     ): OrchestratorResult {
         try {
             val messages = mutableListOf<Map<String, Any?>>()
@@ -57,6 +60,11 @@ class LlmVoiceOrchestrator(
                 }
             }
             messages.add(mapOf("role" to "system", "content" to systemContent))
+            for ((role, text) in conversationHistory) {
+                if (role != "user" && role != "assistant") continue
+                if (text.isBlank()) continue
+                messages.add(mapOf("role" to role, "content" to text))
+            }
             messages.add(mapOf("role" to "user", "content" to transcript))
 
             val tools = toolRegistry.toolDefinitions.map { tool ->
@@ -187,7 +195,8 @@ class EchoOrchestrator : VoiceOrchestrator {
         sessionId: UUID,
         clientTurnId: UUID,
         transcript: String,
-        memoryContext: String?
+        memoryContext: String?,
+        conversationHistory: List<Pair<String, String>>
     ): OrchestratorResult {
         val text = if (transcript.isBlank()) {
             "I didn't catch that. Could you try again?"

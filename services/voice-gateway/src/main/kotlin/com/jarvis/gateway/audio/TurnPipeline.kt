@@ -59,18 +59,30 @@ class TurnPipeline(
         repository.insertTurn(session.sessionId, clientTurnId, "user", transcript)
         logger.info("User turn persisted: clientTurnId={}, transcript={}", clientTurnId, transcript)
 
-        // 3. Load memory context
+        // 3. Same-session conversation history for follow-ups ("try again", "what was that?")
+        val conversationHistory = repository.recentTurns(session.sessionId, limit = 40)
+            .asSequence()
+            .filterNot { it.clientTurnId == clientTurnId && it.role == "user" }
+            .mapNotNull { turn ->
+                val text = turn.text?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                if (turn.role != "user" && turn.role != "assistant") return@mapNotNull null
+                turn.role to text
+            }
+            .toList()
+
+        // 4. Load memory context (cross-session / summarized)
         val memoryCtx = memoryService?.let { svc ->
             val chunks = svc.recentChunks(session.sessionId)
             svc.buildMemoryContext(chunks)
         }
 
-        // 4. Generate assistant response via orchestrator
+        // 5. Generate assistant response via orchestrator
         val result = orchestrator.handleUserUtterance(
             sessionId = session.sessionId,
             clientTurnId = clientTurnId,
             transcript = transcript,
-            memoryContext = memoryCtx
+            memoryContext = memoryCtx,
+            conversationHistory = conversationHistory
         )
         val assistantText = result.assistantText
 

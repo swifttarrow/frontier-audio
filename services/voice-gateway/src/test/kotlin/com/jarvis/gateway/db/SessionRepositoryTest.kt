@@ -56,4 +56,26 @@ class SessionRepositoryTest {
         assertEquals("question", userTurn.text)
         assertEquals("answer", assistantTurn.text)
     }
+
+    @Test
+    fun `recentTurns returns oldest first capped by limit`() {
+        val session = repo.createSession("device-5", "hash-recent")
+        val t1 = UUID.randomUUID()
+        val t2 = UUID.randomUUID()
+        val t3 = UUID.randomUUID()
+        repo.insertTurn(session.id, t1, "user", "a")
+        repo.insertTurn(session.id, t1, "assistant", "b")
+        repo.insertTurn(session.id, t2, "user", "c")
+        repo.insertTurn(session.id, t2, "assistant", "d")
+        repo.insertTurn(session.id, t3, "user", "e")
+        repo.insertTurn(session.id, t3, "assistant", "f")
+
+        val last4 = repo.recentTurns(session.id, limit = 4)
+        assertEquals(4, last4.size)
+        assertEquals(listOf("c", "d", "e", "f"), last4.map { it.text })
+
+        val all6 = repo.recentTurns(session.id, limit = 20)
+        assertEquals(6, all6.size)
+        assertEquals(listOf("a", "b", "c", "d", "e", "f"), all6.map { it.text })
+    }
 }

@@ -53,6 +53,17 @@ class SessionRepository {
         }.firstOrNull()?.toConversationTurn()
     }
 
+    /**
+     * Most recent [limit] rows for the session, oldest-first (suitable for LLM context).
+     */
+    fun recentTurns(sessionId: UUID, limit: Int = 40): List<ConversationTurn> = transaction {
+        ConversationTurns.selectAll().where { ConversationTurns.sessionId eq sessionId }
+            .orderBy(ConversationTurns.createdAt to SortOrder.DESC)
+            .limit(limit)
+            .map { it.toConversationTurn() }
+            .reversed()
+    }
+
     fun insertTurn(sessionId: UUID, clientTurnId: UUID, role: String, text: String?): ConversationTurn = transaction {
         val now = OffsetDateTime.now(ZoneOffset.UTC)
         val id = UUID.randomUUID()
