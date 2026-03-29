@@ -1,0 +1,11 @@
+# Deploy this service with Railway "Root Directory" set to: services/voice-gateway
+# Add a PostgreSQL plugin and share DATABASE_URL into this service (reference variable).
+
+[build]
+buildCommand = "gradle installDist --no-daemon --stacktrace"
+
+[deploy]
+startCommand = "./build/install/voice-gateway/bin/voice-gateway"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
