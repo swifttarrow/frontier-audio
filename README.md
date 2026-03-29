@@ -89,6 +89,8 @@ The server starts on `http://localhost:8080` with:
 - `WSS /v1/voice` — voice WebSocket endpoint
 - `DELETE /v1/devices/{deviceId}/data` — admin data deletion
 
+There is **no browser UI** for voice. Opening the gateway’s HTTPS origin in a tab is only useful for **operational HTTP routes** (for example `GET /health` or `GET /metrics`). The assistant runs over **`wss://…/v1/voice`** from the **Android app** (or any client that speaks the [WebSocket protocol](docs/contracts/websocket-protocol.md)).
+
 ### 4. Run the Android app
 
 ```bash
@@ -170,6 +172,7 @@ See [docs/eval/mvp-scenarios.md](docs/eval/mvp-scenarios.md) for the full evalua
 
 ## Known limitations
 
+- **No web client** — no hosted HTML/JS app; voice is WebSocket-only (`/v1/voice`), intended for the Android client unless you build your own WS client
 - **No private repos** — only public GitHub repositories via configured URL
 - **No keyboard input** — all interaction is voice-only by design
 - **Single-tenant** — one device identity per session, no multi-user auth
