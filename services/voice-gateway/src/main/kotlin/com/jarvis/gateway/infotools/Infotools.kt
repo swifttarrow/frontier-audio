@@ -2,6 +2,7 @@ package com.jarvis.gateway.infotools
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.jarvis.gateway.format.VoiceFriendlyTime
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -89,7 +90,7 @@ class InfotoolsService(
             "source" to "device_session",
             "latitude" to sessionLat,
             "longitude" to sessionLon,
-            "fetched_at" to Instant.now().toString()
+            "fetched_at" to VoiceFriendlyTime.formatUtc(Instant.now()) + " UTC"
         )
         sessionLocationLabel?.trim()?.takeIf { it.isNotEmpty() }?.let {
             payload["client_location_label"] = it
@@ -167,7 +168,7 @@ class InfotoolsService(
             "conditions" to wmoWeatherDescription(code),
             "observation_time" to (current.get("time")?.asText() ?: ""),
             "timezone_note" to (root.get("timezone")?.asText() ?: ""),
-            "fetched_at" to Instant.now().toString()
+            "fetched_at" to VoiceFriendlyTime.formatUtc(Instant.now()) + " UTC"
         )
         return mapper.writeValueAsString(payload)
     }
@@ -217,7 +218,7 @@ class InfotoolsService(
                 "low" to row["Low"],
                 "close" to close,
                 "volume" to row["Volume"],
-                "fetched_at" to Instant.now().toString()
+                "fetched_at" to VoiceFriendlyTime.formatUtc(Instant.now()) + " UTC"
             )
         )
     }
@@ -274,7 +275,7 @@ class InfotoolsService(
             mapOf(
                 "answer" to answer,
                 "results" to snippets,
-                "fetched_at" to Instant.now().toString()
+                "fetched_at" to VoiceFriendlyTime.formatUtc(Instant.now()) + " UTC"
             )
         )
     }

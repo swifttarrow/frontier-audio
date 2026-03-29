@@ -4,6 +4,7 @@ import com.jarvis.gateway.audio.TurnInterruptedException
 import com.jarvis.gateway.config.EnvSupport
 import com.jarvis.gateway.errors.UserFacingError
 import com.jarvis.gateway.errors.mapThrowableToUserFacing
+import com.jarvis.gateway.format.VoiceFriendlyTime
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -148,7 +149,8 @@ class LlmVoiceOrchestrator(
                         logger.info("Executing tool: {} args={}", tc.name, args)
                         val result = toolRegistry.executeTool(tc.name, args, sessionId)
                         val freshnessNote = buildFreshnessNote(result.asOf)
-                        val resultContent = "${result.data}\n[Data fetched: ${result.asOf}$freshnessNote]"
+                        val fetchedAt = VoiceFriendlyTime.formatUtc(result.asOf)
+                        val resultContent = "${result.data}\n[Data fetched: $fetchedAt UTC$freshnessNote]"
                         messages.add(mapOf(
                             "role" to "tool",
                             "tool_call_id" to tc.id,

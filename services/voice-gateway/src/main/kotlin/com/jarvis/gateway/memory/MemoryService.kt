@@ -1,5 +1,6 @@
 package com.jarvis.gateway.memory
 
+import com.jarvis.gateway.format.VoiceFriendlyTime
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
@@ -48,7 +49,8 @@ class SimpleMemoryService(
     override fun buildMemoryContext(chunks: List<MemoryChunk>): String? {
         if (chunks.isEmpty()) return null
         return chunks.joinToString("\n") { chunk ->
-            "[${chunk.createdAt}] ${chunk.summary}"
+            val whenStr = VoiceFriendlyTime.formatUtc(chunk.createdAt.toInstant())
+            "[$whenStr UTC] ${chunk.summary}"
         }
     }
 
