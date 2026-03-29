@@ -174,7 +174,7 @@ We are building **Jarvis**: a voice-first assistant that answers from a **provid
 
 ### 8.3 Memory recall (“we talked about X yesterday”)
 
-1. Utterance transcribed; orchestrator retrieves **MemoryChunk** for session.
+1. Utterance transcribed; orchestrator retrieves **MemoryChunk** rows scoped by **device** (same `deviceId` across **multiple** server `sessionId`s / reconnects). **ConversationTurn** history for the **current** WebSocket session is separate and used for in-session follow-ups.
 2. Answer uses only retrieved content; if missing, assistant says it does not recall (PRD T-4).
 
 ### 8.4 GitHub-grounded question (no user-typed URL)

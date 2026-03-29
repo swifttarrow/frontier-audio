@@ -23,10 +23,10 @@
 - **Ref:** PRD V-4, spec §8.2
 
 ### V-4: Cross-session memory recall
-- **Given** user discussed "project budget" in a previous turn
-- **When** user asks "what did we talk about earlier?"
-- **Then** Jarvis references the budget topic from memory
-- **Ref:** PRD V-5, spec §8.3
+- **Given** on the **same device / install**, user discussed "project budget" in an **earlier WebSocket session** (e.g. prior app session: force-stop, relaunch, or reconnect so `session.start` runs again)
+- **When** user asks "what did we talk about yesterday?" or "remind me what we discussed about the budget"
+- **Then** Jarvis references the budget topic from **device-scoped** memory (not only the current connection’s turns)
+- **Ref:** PRD V-5, spec §8.3 · **Milestone:** [m6-device-scoped-memory](../milestones/m6-device-scoped-memory/)
 
 ### V-5: No recall when memory is empty
 - **Given** fresh session with no prior turns

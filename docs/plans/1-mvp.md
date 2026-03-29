@@ -163,7 +163,7 @@ Implement **MemoryChunk** persistence and retrieval keyed by **session/device**;
 ### Changes Required
 
 - **DB:** `memory_chunks` table; migration.
-- **Service:** CRUD + “retrieve relevant chunks” (start with **recent + simple keyword/session filter**; upgrade to embedding search only if spec’d later).
+- **Service:** CRUD + “retrieve relevant chunks” (m3: by `sessionId`; **Phase 3b / m6:** by **`deviceId`** for cross-session recall).
 - **Orchestrator:** Prompt section for memory; explicit behavior when no memory hit (spec T-4).
 
 ### Success Criteria
@@ -178,6 +178,34 @@ Implement **MemoryChunk** persistence and retrieval keyed by **session/device**;
 - [ ] End-to-end: prior turn referenced in a later “what did we discuss” style query (voice path)
 
 **Note:** Pause for human confirmation after this phase before proceeding.
+
+---
+
+## Phase 3b: Device-scoped memory (cross-session recall, option A)
+
+### Overview
+
+**PRD / spec gap:** Milestone 3 retrieves memory by **`sessionId` only**, but each `session.start` creates a **new** session. Recall for the **same physical device** across visits requires loading **`memory_chunks` by `deviceId`** (join through `device_sessions`), without **session token resume** (option B out of scope).
+
+### Changes Required
+
+- **Repository:** `recentChunksForDevice(deviceId, limit)` (or equivalent) via SQL join; keep writes keyed by current `session_id`.
+- **Pipeline:** `TurnPipeline` builds orchestrator memory context from **device** scope; **conversation turns** stay **session-scoped** for in-call follow-ups.
+- **Tests:** Same device, two sessions → shared memory context; different devices → isolated.
+- **Docs:** Align `docs/specs/1-initial.md` §8.3 and `docs/eval/mvp-scenarios.md` with reconnect / new-session recall.
+
+**Milestone artifacts:** [`docs/milestones/m6-device-scoped-memory/`](../milestones/m6-device-scoped-memory/README.md)
+
+### Success Criteria
+
+#### Automated Verification
+
+- [ ] `make test` — device-scoped retrieval tests as above
+- [ ] `make lint`
+
+#### Manual Verification
+
+- [ ] Disconnect or restart client → new session → user can recall a topic from the prior connection (same install / `deviceId`)
 
 ---
 
