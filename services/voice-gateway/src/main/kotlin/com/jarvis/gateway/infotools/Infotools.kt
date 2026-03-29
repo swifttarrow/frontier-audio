@@ -12,6 +12,9 @@ import java.time.Instant
 private val logger = LoggerFactory.getLogger("Infotools")
 private val mapper = jacksonObjectMapper()
 
+/** Nominatim requires a valid User-Agent per https://operations.osmfoundation.org/policies/nominatim/ */
+private const val NOMINATIM_USER_AGENT = "frontier-audio-jarvis-voice-gateway/0.1 (voice assistant)"
+
 /** Normalize user ticker (e.g. SPY) to Stooq symbol (spy.us). */
 internal fun normalizeStooqSymbol(raw: String): String {
     val s = raw.trim().lowercase()
@@ -43,6 +46,57 @@ class InfotoolsService(
     private val httpClient: HttpClient,
     private val tavilyApiKey: String?
 ) {
+
+    /**
+     * Reports coordinates last sent by the app in `session.start` (WGS84).
+     * Optionally enriches with reverse geocoding (OpenStreetMap Nominatim) when the network allows.
+     */
+    suspend fun deviceLocationReport(
+        sessionLat: Double?,
+        sessionLon: Double?,
+        sessionLocationLabel: String?
+    ): String {
+        if (sessionLat == null || sessionLon == null) {
+            return mapper.writeValueAsString(
+                mapOf(
+                    "error" to "location_unavailable",
+                    "message" to "This session has no device coordinates. The app includes latitude and longitude in " +
+                        "session.start only when location permission is granted and a last-known fix exists. " +
+                        "Suggest the user enable location for Jarvis, or they can name a city for weather and other local answers."
+                )
+            )
+        }
+
+        var placeDescription: String? = null
+        try {
+            val response = httpClient.get("https://nominatim.openstreetmap.org/reverse") {
+                parameter("lat", sessionLat)
+                parameter("lon", sessionLon)
+                parameter("format", "json")
+                header(HttpHeaders.UserAgent, NOMINATIM_USER_AGENT)
+            }
+            if (response.status == HttpStatusCode.OK) {
+                val root = mapper.readTree(response.bodyAsText())
+                placeDescription = root.get("display_name")?.asText()?.trim()?.takeIf { it.isNotEmpty() }
+            } else {
+                logger.warn("Nominatim reverse failed: {}", response.status)
+            }
+        } catch (e: Exception) {
+            logger.warn("Nominatim reverse geocode error: {}", e.message)
+        }
+
+        val payload = linkedMapOf<String, Any>(
+            "source" to "device_session",
+            "latitude" to sessionLat,
+            "longitude" to sessionLon,
+            "fetched_at" to Instant.now().toString()
+        )
+        sessionLocationLabel?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            payload["client_location_label"] = it
+        }
+        placeDescription?.let { payload["place_description"] = it }
+        return mapper.writeValueAsString(payload)
+    }
 
     suspend fun weatherCurrent(
         locationQuery: String?,

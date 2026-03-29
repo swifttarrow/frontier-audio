@@ -61,4 +61,18 @@ class ToolRegistryTest {
         assertContains(result.data, "location_required")
         http.close()
     }
+
+    @Test
+    fun `device_location returns location_unavailable without session coords`() = runBlocking {
+        DatabaseFactory.initForTest()
+        val sessionManager = SessionManager(SessionRepository(), IntegrationConfig(null, null, null))
+        val active = sessionManager.createSession("device-t4")
+        val http = HttpClient(CIO)
+        val registry = ToolRegistry(http, null, 180, sessionManager, FakeOperationalAdapter())
+
+        val result = registry.executeTool("device_location", emptyMap(), active.sessionId)
+
+        assertContains(result.data, "location_unavailable")
+        http.close()
+    }
 }

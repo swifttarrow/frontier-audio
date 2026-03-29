@@ -85,11 +85,20 @@ class ToolRegistry(
             parameters = mapOf("limit" to "integer, optional")
         ),
         ToolDef(
+            name = "device_location",
+            description = "The user's current device coordinates for this voice session (latitude/longitude in WGS84), " +
+                "as reported by the app when the session started, plus an optional human-readable place name from reverse geocoding. " +
+                "Call this when the user asks where they are, what their coordinates are, whether you know their location, " +
+                "or before weather_current for 'here' if you need to confirm coordinates exist. " +
+                "Do not invent coordinates — only report what this tool returns.",
+            parameters = emptyMap()
+        ),
+        ToolDef(
             name = "weather_current",
             description = "Current weather (temperature, conditions, wind) for a place or for the user's device location. " +
                 "Use when the user asks about weather. If they name a city or region, pass it as location_query. " +
                 "If they say 'here' or do not specify a place, omit location_query so the tool uses coordinates " +
-                "from the app session when available.",
+                "from the app session when available. If unsure whether the session has coordinates, call device_location first.",
             parameters = mapOf(
                 "location_query" to "string, optional — e.g. Austin, Paris France; omit for device location"
             )
@@ -195,6 +204,15 @@ class ToolRegistry(
                 val limit = (args["limit"] as? Number)?.toInt()
                 val result = operationalAdapter.alertsOrEvents(limit)
                 result.toToolResult()
+            }
+            "device_location" -> {
+                val session = sessionManager.getActive(sessionId)
+                val data = infotools.deviceLocationReport(
+                    sessionLat = session?.clientLatitude,
+                    sessionLon = session?.clientLongitude,
+                    sessionLocationLabel = session?.clientLocationLabel
+                )
+                ToolResult(data = data, asOf = Instant.now())
             }
             "weather_current" -> {
                 val session = sessionManager.getActive(sessionId)
