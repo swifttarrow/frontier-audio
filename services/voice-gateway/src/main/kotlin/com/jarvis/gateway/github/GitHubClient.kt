@@ -86,7 +86,14 @@ class HttpGitHubClient(
                 cache[cacheKey] = CacheEntry(payload, now.plusSeconds(cacheTtlSeconds))
                 return payload
             }
-            HttpStatusCode.Forbidden, HttpStatusCode.TooManyRequests -> {
+            HttpStatusCode.Unauthorized -> {
+                throw GitHubApiException(
+                    code = "github.unauthorized",
+                    message = "GitHub returned 401: invalid, expired, or revoked token, or missing SSO authorization for an organization.",
+                    retryable = false
+                )
+            }
+            HttpStatusCode.TooManyRequests -> {
                 val resetHeader = response.headers["X-RateLimit-Reset"]
                 val resetAt = resetHeader?.toLongOrNull()?.let { Instant.ofEpochSecond(it) }
                 throw GitHubApiException(
@@ -94,6 +101,24 @@ class HttpGitHubClient(
                     message = "GitHub rate limit exceeded. Please try again in a moment.",
                     retryable = true,
                     resetAt = resetAt
+                )
+            }
+            HttpStatusCode.Forbidden -> {
+                val remaining = response.headers["X-RateLimit-Remaining"]
+                if (remaining == "0") {
+                    val resetHeader = response.headers["X-RateLimit-Reset"]
+                    val resetAt = resetHeader?.toLongOrNull()?.let { Instant.ofEpochSecond(it) }
+                    throw GitHubApiException(
+                        code = "github.rate_limited",
+                        message = "GitHub rate limit exceeded. Please try again in a moment.",
+                        retryable = true,
+                        resetAt = resetAt
+                    )
+                }
+                throw GitHubApiException(
+                    code = "github.forbidden",
+                    message = "GitHub returned 403: token may lack permission for this resource, or organization SSO must be authorized for this token.",
+                    retryable = false
                 )
             }
             HttpStatusCode.NotFound -> {

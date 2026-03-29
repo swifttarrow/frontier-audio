@@ -45,7 +45,14 @@ suspend fun listPublicReposForUser(
             }
             return GitHubPayload(items = slim, asOf = now, etag = response.headers[HttpHeaders.ETag])
         }
-        HttpStatusCode.Forbidden, HttpStatusCode.TooManyRequests -> {
+        HttpStatusCode.Unauthorized -> {
+            throw GitHubApiException(
+                code = "github.unauthorized",
+                message = "GitHub returned 401: invalid, expired, or revoked token, or missing SSO authorization for an organization.",
+                retryable = false
+            )
+        }
+        HttpStatusCode.TooManyRequests -> {
             val resetHeader = response.headers["X-RateLimit-Reset"]
             val resetAt = resetHeader?.toLongOrNull()?.let { Instant.ofEpochSecond(it) }
             throw GitHubApiException(
@@ -53,6 +60,24 @@ suspend fun listPublicReposForUser(
                 message = "GitHub rate limit exceeded. Please try again in a moment.",
                 retryable = true,
                 resetAt = resetAt
+            )
+        }
+        HttpStatusCode.Forbidden -> {
+            val remaining = response.headers["X-RateLimit-Remaining"]
+            if (remaining == "0") {
+                val resetHeader = response.headers["X-RateLimit-Reset"]
+                val resetAt = resetHeader?.toLongOrNull()?.let { Instant.ofEpochSecond(it) }
+                throw GitHubApiException(
+                    code = "github.rate_limited",
+                    message = "GitHub rate limit exceeded. Please try again in a moment.",
+                    retryable = true,
+                    resetAt = resetAt
+                )
+            }
+            throw GitHubApiException(
+                code = "github.forbidden",
+                message = "GitHub returned 403: token may lack permission for this resource, or organization SSO must be authorized for this token.",
+                retryable = false
             )
         }
         HttpStatusCode.NotFound -> {

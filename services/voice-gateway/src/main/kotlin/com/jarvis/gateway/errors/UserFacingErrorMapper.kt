@@ -18,6 +18,8 @@ fun mapThrowableToUserFacing(t: Throwable): UserFacingError {
             retryable = t.retryable,
             speak = when (t.code) {
                 "github.rate_limited" -> "GitHub rate limit reached. Please try again in a moment."
+                "github.unauthorized" -> "GitHub rejected the server token. Regenerate the personal access token, set GITHUB_TOKEN for the voice gateway, and for organization repos authorize SSO if required."
+                "github.forbidden" -> "GitHub blocked this request. For a fine-grained token, allow access to the repository and grant read permissions for metadata, issues, and pull requests. For organization repos, authorize SSO for the token."
                 "github.not_found" -> "I couldn't find that repository or resource on GitHub."
                 "github.user_not_found" -> "I couldn't find that GitHub user. Check the spelling of the username."
                 else -> "There was a problem reaching GitHub. Please try again."
